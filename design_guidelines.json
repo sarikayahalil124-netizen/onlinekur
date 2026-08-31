@@ -1,0 +1,202 @@
+{
+  "app_name": "ONLİNE KUR",
+  "personality": "1 iOS-Native Clean (Premium Fintech Variant)",
+  "personality_one_liner": "A high-performance, cinematic, and deeply trustworthy financial terminal prioritizing fast, clear tabular data with a premium gold touch.",
+  "color": {
+    "surface": "#F7F7F5",
+    "onSurface": "#111318",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#70737A",
+    "surfaceTertiary": "#F0F0EE",
+    "onSurfaceTertiary": "#70737A",
+    "surfaceInverse": "#090B0F",
+    "onSurfaceInverse": "#F4F4F2",
+    "brand": "#B9933F",
+    "brandPrimary": "#B9933F",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#D0AB55",
+    "onBrandSecondary": "#111318",
+    "brandTertiary": "#F4EBD9",
+    "onBrandTertiary": "#B9933F",
+    "success": "#1B8A44",
+    "onSuccess": "#FFFFFF",
+    "warning": "#E69500",
+    "onWarning": "#FFFFFF",
+    "error": "#D92525",
+    "onError": "#FFFFFF",
+    "info": "#2B6CB0",
+    "onInfo": "#FFFFFF",
+    "border": "#E7E7E3",
+    "borderStrong": "#B9933F",
+    "divider": "#E7E7E3",
+    "dark": {
+      "surface": "#090B0F",
+      "onSurface": "#F4F4F2",
+      "surfaceSecondary": "#12151B",
+      "onSurfaceSecondary": "#9499A3",
+      "surfaceTertiary": "#191D24",
+      "onSurfaceTertiary": "#9499A3",
+      "surfaceInverse": "#F7F7F5",
+      "onSurfaceInverse": "#111318",
+      "brand": "#D0AB55",
+      "brandPrimary": "#D0AB55",
+      "onBrandPrimary": "#111318",
+      "brandSecondary": "#B9933F",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#2E2512",
+      "onBrandTertiary": "#D0AB55",
+      "success": "#21A65A",
+      "onSuccess": "#FFFFFF",
+      "warning": "#F5A623",
+      "onWarning": "#111318",
+      "error": "#F04646",
+      "onError": "#FFFFFF",
+      "border": "#262B34",
+      "borderStrong": "#D0AB55",
+      "divider": "#262B34"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "monoFontFamily": "Space Grotesk",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical rhythm for clear grouping. Cards never flush to edge (md padding minimum). Consistent spacing for tabular data.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use blur on bottom tab bar",
+      "Use frosted glass overlay for sticky headers over scrolling price lists",
+      "Use translucent premium overlays for the detail screen chart"
+    ],
+    "dont's": [
+      "No glassmorphism on individual price rows",
+      "No glassmorphism on standard form inputs or buttons"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Market (Piyasa)",
+      "purpose": "Primary dashboard displaying live price rows with buy/sell data and trend flashes.",
+      "states": {
+        "loading": "Centered premium gold spinner on solid surface.",
+        "empty": "No data available state with subtle chart illustration and 'Yeniden Dene' CTA.",
+        "error": "Failed to connect to Alt\u0131nkaynak. 'Tekrar Dene' button."
+      },
+      "layout": "Sticky header with glassmorphism containing a pill-shaped Segmented Control (T\u00fcm\u00fc / Alt\u0131n / D\u00f6viz) and a prominent Search bar. Below, full-width or card-based list rows. Each row contains: Product name/code (left), Buy (Al\u0131\u015f) in middle-right, Sell (Sat\u0131\u015f) on far right. Directional indicator chevron. Price flashes (subtle green/red 300-600ms Reanimated color overlay) on update."
+    },
+    {
+      "name": "Favorites (Favoriler)",
+      "purpose": "A curated list of starred products saved on the device.",
+      "states": {
+        "loading": "Skeleton loader matching price rows.",
+        "empty": "Premium outlined star illustration. 'Hen\u00fcz favori eklemediniz.' text.",
+        "error": "Error message with retry."
+      },
+      "layout": "Matches Market list layout precisely but limited to user's starred assets. Includes swipe-to-remove."
+    },
+    {
+      "name": "Calculator (Hesapla)",
+      "purpose": "Convert entered currency or gold amounts to TL based on live market rates.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "Default 0.00 view.",
+        "error": "Error connecting to rates."
+      },
+      "layout": "Large, high-contrast input area at top for amount. Dropdown/selector for the asset. Auto-calculates TL equivalent displayed in large, tabular display font below. Single column, clean, form-style spacing."
+    },
+    {
+      "name": "Alarms (Alarmlar)",
+      "purpose": "Set threshold price alerts for specific assets.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "Bell icon illustration. 'Aktif alarm\u0131n\u0131z bulunmuyor.'",
+        "error": "Error loading alarms."
+      },
+      "layout": "List of active/inactive alarms (with toggle switches). Sticky primary CTA at bottom ('Yeni Alarm Ekle') floating above scroll. Form uses bottom sheet to select asset, condition (> / <), and target price."
+    },
+    {
+      "name": "Settings (Ayarlar)",
+      "purpose": "App preferences, theme selection, and metadata.",
+      "states": {
+        "loading": "Standard spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Grouped list layout (iOS style). Theme selector (System/Light/Dark). Display options (decimal places). Data source ('Alt\u0131nkaynak') and last update timestamp displayed as metadata at bottom."
+    },
+    {
+      "name": "Product Detail",
+      "purpose": "Deep dive into a specific asset's metrics and chart.",
+      "states": {
+        "loading": "Skeleton UI for chart and metrics.",
+        "empty": "N/A",
+        "error": "Failed to load chart data."
+      },
+      "layout": "Hero area displays large current price and daily movement. Below, a clean line chart (optional historical). Stats grid: Buy, Sell, Intra-day High/Low, Source. 'Favoriye Ekle' button."
+    },
+    {
+      "name": "Admin Panel",
+      "purpose": "Hidden, password-protected dashboard for system health and margin adjustments.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "N/A",
+        "error": "Auth failed or unauthorized."
+      },
+      "layout": "Dense, tabular terminal view. Top section: Health metrics (API status, latency, active product count) in 2-col cards. Bottom section: Dense live price table with horizontal scroll (Market Buy/Sell, ONL\u0130NE KUR Buy/Sell, Margin, Status). Manual price toggle and save/draft workflow at the bottom."
+    }
+  ],
+  "images": {
+    "product_detail_hero": {
+      "url": "https://images.unsplash.com/photo-1733935156769-fe0c2a600d6c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwZGFyayUyMGdvbGQlMjBncmFkaWVudCUyMHRleHR1cmV8ZW58MHx8fHwxNzg4MTgzNzcxfDA&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1611325058416-db7794e8e32c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwyfHxtaW5pbWFsaXN0JTIwZGFyayUyMGdvbGQlMjBncmFkaWVudCUyMHRleHR1cmV8ZW58MHx8fHwxNzg4MTgzNzcxfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Subtle premium gold texture for product background"
+    }
+  },
+  "instructions_to_main_agent": [
+    "STRICT COLOR COMPLIANCE: You MUST use the exact hex codes provided in the JSON payload (which mirror the user's explicit request). Do NOT alter the background, card, text, or gold accent hex codes. Dark mode must use the specified OLED-friendly colors (#090B0F, #12151B) and not generic black.",
+    "TABULAR NUMBERS: For all price values across the Market, Favorites, Calculator, and Product Detail screens, apply font-variant numeric 'tabular-nums' or use a mono-spaced font strategy (e.g., Space Grotesk) to ensure vertical alignment of digits. Use the Turkish format strictly (e.g. 5.245,70 TL).",
+    "SUBTLE PRICE FLASHING: Implement a very short (300-600ms) background flash overlay (green for up, red for down) in the price row when a price updates. Use react-native-reanimated for a smooth fade out. Ensure it does NOT look like a casino blink. It should be a highly professional, subtle opacity shift.",
+    "PREMIUM TAB BAR: The 5-tab bottom navigation must use a single stroke weight for icons (Phosphor icons recommended). Active tab must use the premium gold accent; inactive tabs should be the neutral secondary text color. It must account for iOS safe-area and Android navigation bars without appearing floating or toy-like.",
+    "NO EMOJIS / NO EXCESSIVE DECORATION: The aesthetic is a premium Bloomberg-style terminal. Avoid heavy drop shadows, excessive gradients, and any use of emoji. Let the data layout and the typography provide the premium feel.",
+    "ADMIN TABLE: The Admin view requires horizontal scrolling for the complex price/margin table. Ensure header rows stay fixed or are clearly demarcated. The table must display Market Buy/Sell alongside ONL\u0130NE KUR Buy/Sell and Margin clearly.",
+    "Provide empty, error, and loading states appropriately with full-screen Flex layouts to avoid broken UI on initial load or failure."
+  ]
+}

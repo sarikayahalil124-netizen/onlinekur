@@ -1,0 +1,35 @@
+{
+  "summary": "ONLİNE KUR full-stack verified. Backend: 15/15 pytest tests passed — /api/meta feedStatus=guncel, /api/prices returns 39 normalized items (25 gold + 14 currency) with correct Turkish number parsing (USD ~48.229 4-decimals, GA ~6858 2-decimals), /api/prices/{code}, /api/history/{code}?range=1G, JWT login (401 wrong pw, 200 right), admin/health & admin/products require Bearer, product margin draft→publish flow applies delta exactly (verified +0.5 TL on USD sell, +0.25 TL global on GBP), manual price mode (mode=manual manualBuy/manualSell) publishes with manual:true and exact values, global-margin PUT + publish reflects in /api/prices, anomalyThreshold and refreshInterval reported. Frontend: Market screen renders 39 rows with real data, Tümü/Altın/Döviz segmented filter (25/14) works, search filters live, favorite star adds USD to Favoriler tab, product detail opens with chart + range switcher (1G/1H/1A/3A/6A/1Y), calculator computes 10 USD → 482,29 ₺ correctly, alarms bottom-sheet creates & lists alarm, theme selector System/Light/Dark switches instantly, hidden admin entry navigates to /admin/login, login succeeds and dashboard shows Altınkaynak health (Çalışıyor, 185ms, 39 active) + live price table + Global Marj + Fiyatları Yayınla. No red screens, no broken flows.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "pointerEvents prop", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Likely coming from a third-party or internal component; migrate any `pointerEvents='none'` prop to `style={{pointerEvents:'none'}}`. Non-blocking warning only."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_onlinekur_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: migrate any `pointerEvents` prop usage to `style.pointerEvents` to silence React Native web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 618 lines — approaching size threshold; consider splitting into modules (poller, admin, prices, auth) if additional features are added.",
+    "MongoDB _id: server.py stores product_configs with _id=code (string) — response paths correctly map _id → code and don't leak ObjectId; admin_products and prices endpoints look clean.",
+    "compute_price handles manual mode fallback if manualBuy/manualSell missing — good defensive path.",
+    "Anomaly rejection compares to last cached sellDec — early first-run values cannot trigger rejection (correct behavior). ANOMALY_THRESHOLD_PCT=30 is exposed via /api/admin/health.",
+    "All admin endpoints correctly gated by Bearer JWT via `Depends(current_admin)`.",
+    "Frontend uses EXPO_PUBLIC_BACKEND_URL from env — no hardcoded URLs found."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_onlinekur_api.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. Test flow uses admin credentials seeded from backend/.env; each margin/manual test reverts its own draft and publishes to restore zero-margin baseline.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend at https://premium-kur.preview.emergentagent.com. Admin login admin@onlinekur.com / OnlineKur2026!Admin. Poller updates every 10s so absolute prices drift — verify margin flows by delta = published - marketPrice, not absolute. Reuse /app/backend/tests/test_onlinekur_api.py for regression."
+}

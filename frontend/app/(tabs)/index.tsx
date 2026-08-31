@@ -1,0 +1,156 @@
+import React, { useMemo, useState } from "react";
+import { View, Text, StyleSheet, FlatList, TextInput, Pressable, RefreshControl, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@/src/theme/ThemeContext";
+import { usePrices } from "@/src/context/PricesContext";
+import { PriceRow } from "@/src/components/PriceRow";
+import { SegmentedControl } from "@/src/components/SegmentedControl";
+import { formatTime } from "@/src/utils/format";
+
+export default function MarketScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { items, feedStatus, lastSuccess, source, loading, error, refresh } = usePrices();
+
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const data = useMemo(() => {
+    let list = items;
+    if (filter !== "all") list = list.filter((i) => i.type === filter);
+    if (search.trim()) {
+      const q = search.trim().toLocaleLowerCase("tr");
+      list = list.filter((i) => i.name.toLocaleLowerCase("tr").includes(q) || i.code.toLocaleLowerCase("tr").includes(q));
+    }
+    return list;
+  }, [items, filter, search]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  };
+
+  const feedColor =
+    feedStatus === "guncel" ? colors.up : feedStatus === "gecikmeli" ? colors.warning : colors.down;
+  const feedLabel =
+    feedStatus === "guncel" ? "Canlı" : feedStatus === "gecikmeli" ? "Gecikmeli" : "Veri Güncellenemiyor";
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      {/* Sticky header */}
+      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+        <View style={styles.titleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.title, { color: colors.text }]}>ONLİNE KUR</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Altın & Döviz Piyasaları</Text>
+          </View>
+          <View style={styles.feedBox}>
+            <View style={[styles.feedDot, { backgroundColor: feedColor }]} />
+            <Text style={[styles.feedTxt, { color: feedColor }]}>{feedLabel}</Text>
+          </View>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            Son güncelleme <Text style={{ color: colors.text, fontVariant: ["tabular-nums"] }}>{formatTime(lastSuccess)}</Text>
+          </Text>
+          <Text style={[styles.meta, { color: colors.textSecondary }]}>
+            Kaynak <Text style={{ color: colors.gold, fontWeight: "700" }}>{source}</Text>
+          </Text>
+        </View>
+
+        <View style={[styles.searchBox, { backgroundColor: colors.card2, borderColor: colors.border }]}>
+          <Ionicons name="search" size={16} color={colors.textSecondary} />
+          <TextInput
+            testID="market-search"
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Ürün ara..."
+            placeholderTextColor={colors.textTertiary}
+            style={[styles.searchInput, { color: colors.text }]}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+            </Pressable>
+          )}
+        </View>
+
+        <View style={styles.segWrap}>
+          <SegmentedControl
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { label: "Tümü", value: "all" },
+              { label: "Altın", value: "gold" },
+              { label: "Döviz", value: "currency" },
+            ]}
+          />
+        </View>
+      </View>
+
+      {loading && items.length === 0 ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.gold} size="large" />
+          <Text style={[styles.centerTxt, { color: colors.textSecondary }]}>Piyasa verileri yükleniyor...</Text>
+        </View>
+      ) : error && items.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={44} color={colors.textTertiary} />
+          <Text style={[styles.centerTxt, { color: colors.text }]}>Altınkaynak'a bağlanılamadı</Text>
+          <Pressable testID="market-retry" onPress={onRefresh} style={[styles.retryBtn, { backgroundColor: colors.gold }]}>
+            <Text style={{ color: colors.onGold, fontWeight: "700" }}>Tekrar Dene</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={data}
+          keyExtractor={(i) => i.code}
+          renderItem={({ item }) => <PriceRow item={item} onPress={() => router.push(`/product/${item.code}`)} />}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={[styles.centerTxt, { color: colors.textSecondary }]}>Sonuç bulunamadı</Text>
+            </View>
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  titleRow: { flexDirection: "row", alignItems: "flex-start" },
+  title: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, marginTop: 2, letterSpacing: -0.2 },
+  feedBox: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  feedDot: { width: 7, height: 7, borderRadius: 4, marginRight: 5 },
+  feedTxt: { fontSize: 12, fontWeight: "700" },
+  metaRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
+  meta: { fontSize: 12 },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 40,
+    marginTop: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  segWrap: { marginTop: 12 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 12 },
+  centerTxt: { fontSize: 14, textAlign: "center" },
+  retryBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 4 },
+});
