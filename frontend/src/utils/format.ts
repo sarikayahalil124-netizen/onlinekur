@@ -41,6 +41,27 @@ export function providerTimeOnly(s: string | null | undefined): string {
   return parts.length > 1 ? parts[1] : s;
 }
 
+// Signed percentage, e.g. 1.24 -> "+%1,24", -0.5 -> "-%0,50"
+export function formatPct(value: number | null | undefined): string {
+  if (value === null || value === undefined || isNaN(value)) return "—";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return sign + "%" + formatNumber(Math.abs(value), 2);
+}
+
+// ISO -> "31.08.2026 16:47"
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("tr-TR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+  } catch {
+    return "—";
+  }
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   guncel: "Güncel",
   gecikmeli: "Gecikmeli",

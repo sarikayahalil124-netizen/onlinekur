@@ -4,17 +4,19 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/src/theme/ThemeContext";
 import { usePrices } from "@/src/context/PricesContext";
-import { useAlarms, Alarm } from "@/src/context/AlarmsContext";
+import { useAlarms, Alarm, AlarmEvent } from "@/src/context/AlarmsContext";
 import { Sheet } from "@/src/components/Sheet";
+import { SegmentedControl } from "@/src/components/SegmentedControl";
 import { requestPushForAlarms } from "@/src/utils/push";
-import { formatNumber, formatTime, parseTR } from "@/src/utils/format";
+import { formatNumber, formatTime, formatDateTime, parseTR } from "@/src/utils/format";
 
 export default function AlarmsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { items, byCode } = usePrices();
-  const { alarms, add, remove, toggle } = useAlarms();
+  const { alarms, history, add, remove, toggle } = useAlarms();
 
+  const [tab, setTab] = useState<"active" | "history">("active");
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [code, setCode] = useState("USD");
@@ -76,14 +78,58 @@ export default function AlarmsScreen() {
     );
   };
 
+  const renderHistory = ({ item: h }: { item: AlarmEvent }) => {
+    const dirColor = h.condition === ">" ? colors.up : colors.down;
+    return (
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.histIcon, { backgroundColor: dirColor + "1F" }]}>
+          <Ionicons name={h.condition === ">" ? "trending-up" : "trending-down"} size={18} color={dirColor} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.cardName, { color: colors.text }]}>{h.name}</Text>
+          <Text style={[styles.cardCond, { color: colors.textSecondary }]}>
+            {h.basis === "buy" ? "Alış" : "Satış"} {h.condition} {formatNumber(h.target, h.decimals)}
+            <Text style={{ color: dirColor }}>  ·  {formatNumber(h.price, h.decimals)}</Text>
+          </Text>
+          <Text style={[styles.trigTime, { color: colors.textTertiary }]}>{formatDateTime(h.triggeredAt)}</Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.text }]}>Alarmlar</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Fiyat hedefleriniz</Text>
+        <View style={{ marginTop: 12 }}>
+          <SegmentedControl
+            value={tab}
+            onChange={(v) => setTab(v as "active" | "history")}
+            options={[
+              { label: "Aktif", value: "active" },
+              { label: `Geçmiş${history.length ? ` (${history.length})` : ""}`, value: "history" },
+            ]}
+          />
+        </View>
       </View>
 
-      {alarms.length === 0 ? (
+      {tab === "history" ? (
+        history.length === 0 ? (
+          <View style={styles.center}>
+            <Ionicons name="time-outline" size={48} color={colors.textTertiary} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Geçmiş kaydı yok</Text>
+            <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>Bir alarmınız hedefe ulaştığında burada tarih ve fiyatıyla listelenir.</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={history}
+            keyExtractor={(h) => h.id}
+            renderItem={renderHistory}
+            contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 10 }}
+          />
+        )
+      ) : alarms.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="notifications-outline" size={48} color={colors.textTertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Aktif alarmınız bulunmuyor</Text>
@@ -98,14 +144,16 @@ export default function AlarmsScreen() {
         />
       )}
 
-      <Pressable
-        testID="add-alarm-btn"
-        onPress={() => setOpen(true)}
-        style={[styles.fab, { backgroundColor: colors.gold, bottom: 16 }]}
-      >
-        <Ionicons name="add" size={22} color={colors.onGold} />
-        <Text style={[styles.fabTxt, { color: colors.onGold }]}>Yeni Alarm Ekle</Text>
-      </Pressable>
+      {tab === "active" && (
+        <Pressable
+          testID="add-alarm-btn"
+          onPress={() => setOpen(true)}
+          style={[styles.fab, { backgroundColor: colors.gold, bottom: 16 }]}
+        >
+          <Ionicons name="add" size={22} color={colors.onGold} />
+          <Text style={[styles.fabTxt, { color: colors.onGold }]}>Yeni Alarm Ekle</Text>
+        </Pressable>
+      )}
 
       {/* Create sheet */}
       <Sheet visible={open} onClose={() => setOpen(false)} title="Yeni Alarm">
@@ -196,6 +244,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: "700" },
   emptyTxt: { fontSize: 13.5, textAlign: "center", lineHeight: 20 },
   card: { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, padding: 14 },
+  histIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 12 },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 8 },
   cardName: { fontSize: 15, fontWeight: "700" },
   trigTag: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999 },

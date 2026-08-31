@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "847492920963",
+    "project_id": "onli-97fa8",
+    "storage_bucket": "onli-97fa8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:847492920963:android:954acb2d7a2b3b852b0db6",
+        "android_client_info": {
+          "package_name": "online.kur"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBO_Do8TrcDOnPjL_sNaqsbBJSORSxqXMQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

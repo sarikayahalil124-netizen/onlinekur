@@ -9,6 +9,7 @@ import { useSettings } from "@/src/context/SettingsContext";
 import { PriceRow } from "@/src/components/PriceRow";
 import { PriceCard } from "@/src/components/PriceCard";
 import { ColumnsHeader } from "@/src/components/ColumnsHeader";
+import { FavoritesSummary } from "@/src/components/FavoritesSummary";
 import { SegmentedControl } from "@/src/components/SegmentedControl";
 import { formatTime } from "@/src/utils/format";
 
@@ -105,6 +106,8 @@ export default function MarketScreen() {
           />
         </View>
       </View>
+
+      <FavoritesSummary />
 
       {loading && items.length === 0 ? (
         <View style={styles.center}>

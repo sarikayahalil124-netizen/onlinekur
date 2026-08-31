@@ -6,6 +6,7 @@ import { useTheme } from "@/src/theme/ThemeContext";
 import { useFavorites } from "@/src/context/FavoritesContext";
 import { useSettings } from "@/src/context/SettingsContext";
 import { formatNumber, STATUS_LABEL } from "@/src/utils/format";
+import { PercentBadge } from "@/src/components/PercentBadge";
 import { PriceItem } from "@/src/api/client";
 
 interface Props {
@@ -71,6 +72,11 @@ function PriceRowBase({ item, onPress, showStar = true }: Props) {
         </Text>
         <View style={styles.metaRow}>
           <Text style={[styles.code, { color: colors.textTertiary }]}>{item.code}</Text>
+          {!noData && item.changePct != null && (
+            <View style={{ marginLeft: 6 }}>
+              <PercentBadge value={item.changePct} />
+            </View>
+          )}
           {isStale && (
             <Text style={[styles.staleTag, { color: colors.warning }]}> · {STATUS_LABEL[item.status]}</Text>
           )}
@@ -114,5 +120,6 @@ export const PriceRow = React.memo(PriceRowBase, (a, b) =>
   a.item.status === b.item.status &&
   a.item.dir === b.item.dir &&
   a.item.manual === b.item.manual &&
+  a.item.changePct === b.item.changePct &&
   a.showStar === b.showStar,
 );

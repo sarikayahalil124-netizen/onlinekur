@@ -15,8 +15,21 @@ export interface Alarm {
   createdAt: string;
 }
 
+export interface AlarmEvent {
+  id: string;
+  code: string;
+  name: string;
+  basis: "buy" | "sell";
+  condition: ">" | "<";
+  target: number;
+  price: number;
+  decimals: number;
+  triggeredAt: string;
+}
+
 interface AlarmsCtx {
   alarms: Alarm[];
+  history: AlarmEvent[];
   add: (a: { code: string; name: string; basis: "buy" | "sell"; condition: ">" | "<"; target: number }) => Promise<void>;
   remove: (id: string) => Promise<void>;
   toggle: (id: string) => Promise<void>;
@@ -27,13 +40,18 @@ const Ctx = createContext<AlarmsCtx | null>(null);
 
 export function AlarmsProvider({ children }: { children: React.ReactNode }) {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const [history, setHistory] = useState<AlarmEvent[]>([]);
   const registered = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const deviceId = await getDeviceId();
-      const data = await api.getAlarms(deviceId);
+      const [data, hist] = await Promise.all([
+        api.getAlarms(deviceId),
+        api.getAlarmHistory(deviceId).catch(() => ({ items: [] })),
+      ]);
       setAlarms(data.items || []);
+      setHistory(hist.items || []);
       // Refresh push token silently once per session if user already granted permission.
       if (!registered.current && (data.items || []).length > 0) {
         registered.current = true;
@@ -80,7 +98,7 @@ export function AlarmsProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  return <Ctx.Provider value={{ alarms, add, remove, toggle, refresh }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ alarms, history, add, remove, toggle, refresh }}>{children}</Ctx.Provider>;
 }
 
 export function useAlarms(): AlarmsCtx {

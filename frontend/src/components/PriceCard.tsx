@@ -5,6 +5,7 @@ import { useTheme } from "@/src/theme/ThemeContext";
 import { useFavorites } from "@/src/context/FavoritesContext";
 import { useSettings } from "@/src/context/SettingsContext";
 import { formatNumber } from "@/src/utils/format";
+import { PercentBadge } from "@/src/components/PercentBadge";
 import { PriceItem } from "@/src/api/client";
 
 interface Props {
@@ -47,7 +48,11 @@ function PriceCardBase({ item, onPress }: Props) {
 
       <View style={styles.sellRow}>
         <Text style={[styles.sell, { color: colors.text }]}>{noData ? "—" : formatNumber(item.sell, dec)}</Text>
-        <Ionicons name={arrow as any} size={15} color={arrowColor} />
+        {!noData && item.changePct != null ? (
+          <PercentBadge value={item.changePct} />
+        ) : (
+          <Ionicons name={arrow as any} size={15} color={arrowColor} />
+        )}
       </View>
       <Text style={[styles.sellLabel, { color: colors.textTertiary }]}>Satış</Text>
 
@@ -78,5 +83,6 @@ export const PriceCard = React.memo(PriceCardBase, (a, b) =>
   a.item.sell === b.item.sell &&
   a.item.status === b.item.status &&
   a.item.dir === b.item.dir &&
-  a.item.manual === b.item.manual,
+  a.item.manual === b.item.manual &&
+  a.item.changePct === b.item.changePct,
 );

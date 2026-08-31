@@ -18,6 +18,7 @@ export interface PriceItem {
   order: number;
   providerUpdatedAt: string | null;
   receivedAt?: string;
+  changePct?: number | null;
 }
 
 export interface PricesResponse {
@@ -59,6 +60,7 @@ export const api = {
   registerPush: (deviceId: string, platform: string, token: string) =>
     req(`/register-push`, { method: "POST", body: JSON.stringify({ user_id: deviceId, platform, device_token: token }) }),
   getAlarms: (deviceId: string) => req(`/alarms?deviceId=${encodeURIComponent(deviceId)}`),
+  getAlarmHistory: (deviceId: string) => req(`/alarms/history?deviceId=${encodeURIComponent(deviceId)}`),
   createAlarm: (body: any) => req(`/alarms`, { method: "POST", body: JSON.stringify(body) }),
   updateAlarm: (id: string, active: boolean) =>
     req(`/alarms/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ active }) }),

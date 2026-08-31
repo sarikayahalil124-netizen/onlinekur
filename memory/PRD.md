@@ -46,3 +46,10 @@ Push notları:
 - Android push için kullanıcının Firebase `google-services.json` dosyası gerekli (henüz sağlanmadı; sağlanınca `frontend/google-services.json` + app.json `android.googleServicesFile` eklenecek).
 
 Test: iteration_2 — backend 9/9, frontend tüm akışlar geçti.
+
+## Iteration 3 (2026-06) — COMPLETED & tested
+- Daily % change badge (`changePct` in /api/prices, PercentBadge in list & card) — real data, null when no history.
+- Favorites summary widget (FavoritesSummary) at top of market screen — horizontal glance strip.
+- Alarm history (alarm_history collection + GET /api/alarms/history + Aktif/Geçmiş tab on alarms screen).
+- Firebase google-services.json added (android.googleServicesFile). ⚠ package mismatch: file=online.kur vs app.json=com.emergent.premiumkur.gt9vr0 — awaiting user decision.
+All backend + frontend tests passed (iteration_3.json).

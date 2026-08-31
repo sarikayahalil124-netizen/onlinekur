@@ -18,6 +18,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json",
       "package": "com.emergent.premiumkur.gt9vr0"
     },
     "web": {

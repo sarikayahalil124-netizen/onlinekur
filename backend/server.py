@@ -356,6 +356,16 @@ async def list_alarms(deviceId: str):
     return {"items": [alarm_out(d) for d in docs]}
 
 
+@api_router.get("/alarms/history")
+async def alarm_history(deviceId: str):
+    docs = await db.alarm_history.find({"deviceId": deviceId}).sort("triggeredAt", -1).to_list(200)
+    return {"items": [{
+        "id": str(d["_id"]), "code": d["code"], "name": d["name"],
+        "basis": d["basis"], "condition": d["condition"], "target": d["target"],
+        "price": d["price"], "decimals": d.get("decimals", 2), "triggeredAt": d["triggeredAt"],
+    } for d in docs]}
+
+
 @api_router.put("/alarms/{alarm_id}")
 async def update_alarm(alarm_id: str, body: AlarmUpdate):
     try:
@@ -404,6 +414,12 @@ async def check_alarms():
             await db.alarms.update_one({"_id": a["_id"]}, {"$set": {"triggeredAt": now}})
             dec = priced["decimals"]
             cond_txt = "hedefin üzerine çıktı" if a["condition"] == ">" else "hedefin altına indi"
+            await db.alarm_history.insert_one({
+                "deviceId": a["deviceId"], "alarmId": str(a["_id"]),
+                "code": code, "name": a["name"], "basis": a["basis"],
+                "condition": a["condition"], "target": a["target"],
+                "price": price, "decimals": dec, "triggeredAt": now,
+            })
             try:
                 await send_push(
                     recipients=[a["deviceId"]],
@@ -434,6 +450,19 @@ async def day_range(code: str) -> dict:
     ]
     rows = await db.price_history.aggregate(pipeline).to_list(1)
     return rows[0] if rows else {}
+
+
+async def day_opens() -> dict:
+    """First (opening) raw price of the current IST day per code -> for % change."""
+    now_ist = datetime.now(IST_TZ)
+    day_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
+    pipeline = [
+        {"$match": {"ts": {"$gte": day_start}}},
+        {"$sort": {"ts": 1}},
+        {"$group": {"_id": "$code", "openSell": {"$first": "$sell"}, "openBuy": {"$first": "$buy"}}},
+    ]
+    rows = await db.price_history.aggregate(pipeline).to_list(2000)
+    return {r["_id"]: r for r in rows}
 
 
 # ------------------------------------------------------------------ auth helpers
@@ -545,6 +574,7 @@ async def meta():
 async def get_prices(type: str = "all"):
     global_pub = await get_global("published")
     configs = await db.product_configs.find({"active": True}).to_list(1000)
+    opens = await day_opens()
     st = feed_status()
     out = []
     for cfg in configs:
@@ -558,11 +588,13 @@ async def get_prices(type: str = "all"):
                 "buy": None, "sell": None, "marketBuy": None, "marketSell": None,
                 "decimals": decimals_for(cfg["type"]), "dir": "flat",
                 "status": "veri_yok", "manual": False, "order": cfg.get("order", 999),
-                "providerUpdatedAt": None,
+                "providerUpdatedAt": None, "changePct": None,
             })
             continue
         dec = market["decimals"]
         priced = compute_price(market, cfg.get("published", default_rule()), global_pub, dec)
+        op = opens.get(code, {}).get("openSell")
+        change_pct = round((market["sell"] - op) / op * 100, 2) if op and op > 0 else None
         out.append({
             "code": code, "name": market["name"], "type": market["type"],
             "buy": priced["buy"], "sell": priced["sell"],
@@ -572,6 +604,7 @@ async def get_prices(type: str = "all"):
             "manual": priced["manual"], "order": cfg.get("order", 999),
             "providerUpdatedAt": market["providerUpdatedAt"],
             "receivedAt": market["receivedAt"],
+            "changePct": change_pct,
         })
     out.sort(key=lambda x: (x["order"], x["code"]))
     return {"source": PROVIDER["source"], "feedStatus": st,
