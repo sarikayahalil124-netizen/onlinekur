@@ -7,6 +7,7 @@ import { useTheme } from "@/src/theme/ThemeContext";
 import { usePrices } from "@/src/context/PricesContext";
 import { useFavorites } from "@/src/context/FavoritesContext";
 import { PriceRow } from "@/src/components/PriceRow";
+import { ColumnsHeader } from "@/src/components/ColumnsHeader";
 
 export default function FavoritesScreen() {
   const { colors } = useTheme();
@@ -37,6 +38,8 @@ export default function FavoritesScreen() {
           data={data}
           keyExtractor={(i) => i.code}
           renderItem={({ item }) => <PriceRow item={item} onPress={() => router.push(`/product/${item.code}`)} />}
+          ListHeaderComponent={<ColumnsHeader />}
+          stickyHeaderIndices={[0]}
           contentContainerStyle={{ paddingBottom: 24 }}
         />
       )}

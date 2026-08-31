@@ -7,7 +7,7 @@ import { useTheme } from "@/src/theme/ThemeContext";
 import { api } from "@/src/api/client";
 import { Sheet } from "@/src/components/Sheet";
 import { StatusPill } from "@/src/components/StatusPill";
-import { formatNumber, formatTime, providerTimeOnly } from "@/src/utils/format";
+import { formatNumber, formatTime } from "@/src/utils/format";
 
 const COLS = { name: 150, price: 96, margin: 90, status: 110 };
 
@@ -160,6 +160,10 @@ export default function AdminDashboard() {
           <Pressable testID="admin-global-btn" onPress={() => setGlobalOpen(true)} style={[styles.actionBtn, { backgroundColor: colors.card2, borderColor: colors.border }]}>
             <Ionicons name="options-outline" size={16} color={colors.text} />
             <Text style={[styles.actionTxt, { color: colors.text }]}>Global Marj</Text>
+          </Pressable>
+          <Pressable testID="admin-reorder-btn" onPress={() => router.push("/admin/reorder")} style={[styles.actionBtn, { backgroundColor: colors.card2, borderColor: colors.border }]}>
+            <Ionicons name="swap-vertical-outline" size={16} color={colors.text} />
+            <Text style={[styles.actionTxt, { color: colors.text }]}>Sırala</Text>
           </Pressable>
           {hasDraft && (
             <Pressable testID="admin-revert-btn" onPress={doRevert} disabled={busy} style={[styles.actionBtn, { backgroundColor: colors.card2, borderColor: colors.border }]}>
@@ -346,7 +350,7 @@ function ProductEditor({ item, onClose, onSaved }: { item: any; onClose: () => v
         <Pressable testID="edit-save" onPress={save} disabled={saving} style={[edit.saveBtn, { backgroundColor: colors.gold }]}>
           {saving ? <ActivityIndicator color={colors.onGold} /> : <Text style={{ color: colors.onGold, fontWeight: "800", fontSize: 15 }}>Taslağı Kaydet</Text>}
         </Pressable>
-        <Text style={[edit.hint, { color: colors.textTertiary, textAlign: "center", marginTop: 8 }]}>Yayınlamak için tablodaki "Fiyatları Yayınla" butonunu kullanın.</Text>
+        <Text style={[edit.hint, { color: colors.textTertiary, textAlign: "center", marginTop: 8 }]}>Yayınlamak için tablodaki &quot;Fiyatları Yayınla&quot; butonunu kullanın.</Text>
       </ScrollView>
     </Sheet>
   );

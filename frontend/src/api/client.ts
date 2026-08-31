@@ -55,6 +55,15 @@ export const api = {
   getHistory: (code: string, range: string) => req(`/history/${encodeURIComponent(code)}?range=${range}`),
   getMeta: () => req(`/meta`),
 
+  // push + alarms
+  registerPush: (deviceId: string, platform: string, token: string) =>
+    req(`/register-push`, { method: "POST", body: JSON.stringify({ user_id: deviceId, platform, device_token: token }) }),
+  getAlarms: (deviceId: string) => req(`/alarms?deviceId=${encodeURIComponent(deviceId)}`),
+  createAlarm: (body: any) => req(`/alarms`, { method: "POST", body: JSON.stringify(body) }),
+  updateAlarm: (id: string, active: boolean) =>
+    req(`/alarms/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ active }) }),
+  deleteAlarm: (id: string) => req(`/alarms/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
   // admin
   async login(email: string, password: string) {
     const data = await req(`/auth/login`, { method: "POST", body: JSON.stringify({ email, password }) });
@@ -73,6 +82,7 @@ export const api = {
   updateProduct: (code: string, body: any) =>
     req(`/admin/products/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) }, true),
   updateGlobal: (body: any) => req(`/admin/global-margin`, { method: "PUT", body: JSON.stringify(body) }, true),
+  reorderProducts: (codes: string[]) => req(`/admin/reorder`, { method: "PUT", body: JSON.stringify({ codes }) }, true),
   publish: () => req(`/admin/publish`, { method: "POST" }, true),
   revertDraft: () => req(`/admin/revert-draft`, { method: "POST" }, true),
 };

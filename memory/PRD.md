@@ -31,3 +31,18 @@ Note: Workspace was actually a fresh Expo template (no legacy "ALTIN SARAYI" cod
 
 ## Test Credentials
 - Admin: admin@onlinekur.com / OnlineKur2026!Admin (see /app/memory/test_credentials.md).
+
+## İterasyon 2 (Haziran 2026) — Tamamlandı ✅
+Kullanıcı istekleri:
+1. **Kaynak gizleme**: "Altınkaynak" ibaresi kullanıcıya görünen hiçbir ekranda yok (yalnızca admin panelinde provider health olarak görünür).
+2. **Piyasa ekranı**: Varsayılan sekme Döviz; belirgin sütun başlıkları (ÜRÜN/ALIŞ/SATIŞ, sticky); liste ↔ kart görünümü geçişi (ayarlarda kalıcı, `marketView`).
+3. **Ürün detay**: GÜN İÇİ canlı En Yüksek/En Düşük (backend `dayHigh`/`dayLow`, Europe/Istanbul günü, marj uygulanmış); grafik aralıkları Gün/Hafta/Ay/3 Ay/6 Ay/Yıl; grafik altında aralık min/max; "Kaynak" yerine "Makas (Fark)".
+4. **Kur Çevirici**: Hesapla ekranında "TL Karşılığı | Çevirici" modu; ürünler arası çevirme + swap butonu (örn. 5 Çeyrek → USD).
+5. **Admin ürün sıralama**: `/admin/reorder` ekranı — basılı tut & sürükle (reanimated custom sortable, autoscroll); `PUT /api/admin/reorder` anında yayına yansır.
+6. **Alarm push bildirimleri**: Alarmlar artık backend'de (`/api/alarms` CRUD, deviceId bazlı, soft delete). Poll döngüsü her 10 sn'de alarmları değerlendirir; tetiklenince Emergent yönetimli push relay ile bildirim gönderir (`/api/register-push`, `send_push`, `EMERGENT_PUSH_KEY=placeholder` — deploy'da otomatik gerçek değerle değişir). Frontend: cihaz kimliği, bağlamsal bildirim izni (ilk alarm sonrası), bildirim tıklama → ürün detayına yönlendirme, izin reddi için haftalık nudge.
+
+Push notları:
+- Push YALNIZCA Publish + native build sonrası gerçek cihazda çalışır (Expo Go/web'de çalışmaz).
+- Android push için kullanıcının Firebase `google-services.json` dosyası gerekli (henüz sağlanmadı; sağlanınca `frontend/google-services.json` + app.json `android.googleServicesFile` eklenecek).
+
+Test: iteration_2 — backend 9/9, frontend tüm akışlar geçti.

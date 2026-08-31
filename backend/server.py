@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional, Any
 
 import httpx
@@ -263,7 +264,176 @@ async def poller_loop():
             await poll_once()
         except Exception as e:
             logger.error("poller error: %s", e)
+        try:
+            await check_alarms()
+        except Exception as e:
+            logger.error("alarm check error: %s", e)
         await asyncio.sleep(REFRESH_INTERVAL)
+
+
+# ------------------------------------------------------------------ push (Emergent managed relay)
+PUSH_BASE_URL = "https://integrations.emergentagent.com"
+PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+push_client = httpx.AsyncClient(base_url=PUSH_BASE_URL, headers={"X-Push-Key": PUSH_KEY}, timeout=10.0)
+
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str  # "android" | "ios"
+    device_token: str
+
+
+@api_router.post("/register-push", status_code=201)
+async def register_push(body: RegisterPushBody):
+    resp = await push_client.post("/api/v1/push/users/register", json=body.model_dump())
+    if resp.status_code == 401:
+        raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
+    if resp.status_code >= 500:
+        raise HTTPException(502, "Push provider unavailable")
+    resp.raise_for_status()
+    return {"status": "registered"}
+
+
+async def send_push(recipients: list, data: dict, idempotency_key: Optional[str] = None) -> None:
+    if not recipients:
+        return
+    payload: dict = {"recipients": recipients, "data": data}
+    if idempotency_key:
+        payload["$idempotency_key"] = idempotency_key
+    resp = await push_client.post("/api/v1/push/trigger", json=payload)
+    resp.raise_for_status()
+
+
+# ------------------------------------------------------------------ alarms
+BASIS_LABEL = {"buy": "Alış", "sell": "Satış"}
+
+
+def fmt_tr(value: float, dec: int) -> str:
+    s = f"{value:,.{dec}f}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def alarm_out(doc: dict) -> dict:
+    return {
+        "id": str(doc["_id"]), "code": doc["code"], "name": doc["name"],
+        "basis": doc["basis"], "condition": doc["condition"], "target": doc["target"],
+        "active": doc.get("active", True), "triggeredAt": doc.get("triggeredAt"),
+        "createdAt": doc.get("createdAt"),
+    }
+
+
+class AlarmCreate(BaseModel):
+    deviceId: str
+    code: str
+    name: str
+    basis: str = "sell"
+    condition: str = ">"
+    target: float
+
+
+class AlarmUpdate(BaseModel):
+    active: Optional[bool] = None
+
+
+@api_router.post("/alarms")
+async def create_alarm(body: AlarmCreate):
+    if body.basis not in ("buy", "sell") or body.condition not in (">", "<") or body.target <= 0:
+        raise HTTPException(status_code=400, detail="Geçersiz alarm")
+    doc = {
+        "deviceId": body.deviceId, "code": body.code, "name": body.name,
+        "basis": body.basis, "condition": body.condition, "target": body.target,
+        "active": True, "deleted": False, "triggeredAt": None,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.alarms.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return alarm_out(doc)
+
+
+@api_router.get("/alarms")
+async def list_alarms(deviceId: str):
+    docs = await db.alarms.find({"deviceId": deviceId, "deleted": False}).sort("createdAt", -1).to_list(200)
+    return {"items": [alarm_out(d) for d in docs]}
+
+
+@api_router.put("/alarms/{alarm_id}")
+async def update_alarm(alarm_id: str, body: AlarmUpdate):
+    try:
+        aid = ObjectId(alarm_id)
+    except InvalidId:
+        raise HTTPException(status_code=404, detail="Alarm bulunamadı")
+    if body.active is not None:
+        await db.alarms.update_one({"_id": aid}, {"$set": {"active": body.active, "triggeredAt": None}})
+    return {"ok": True}
+
+
+@api_router.delete("/alarms/{alarm_id}")
+async def delete_alarm(alarm_id: str):
+    try:
+        aid = ObjectId(alarm_id)
+    except InvalidId:
+        raise HTTPException(status_code=404, detail="Alarm bulunamadı")
+    await db.alarms.update_one({"_id": aid}, {"$set": {"deleted": True}})
+    return {"ok": True}
+
+
+async def check_alarms():
+    """Evaluate active alarms against published prices; push on trigger, re-arm on release."""
+    alarms = await db.alarms.find({"deleted": False, "active": True}).to_list(1000)
+    if not alarms:
+        return
+    global_pub = await get_global("published")
+    price_cache: dict[str, dict] = {}
+    for a in alarms:
+        code = a["code"]
+        if code not in price_cache:
+            market = MARKET.get(code)
+            if market is None:
+                continue
+            cfg = await db.product_configs.find_one({"_id": code})
+            rule = (cfg or {}).get("published", default_rule())
+            price_cache[code] = {**compute_price(market, rule, global_pub, market["decimals"]),
+                                 "decimals": market["decimals"]}
+        priced = price_cache.get(code)
+        if not priced:
+            continue
+        price = priced["buy"] if a["basis"] == "buy" else priced["sell"]
+        hit = price > a["target"] if a["condition"] == ">" else price < a["target"]
+        if hit and not a.get("triggeredAt"):
+            now = datetime.now(timezone.utc).isoformat()
+            await db.alarms.update_one({"_id": a["_id"]}, {"$set": {"triggeredAt": now}})
+            dec = priced["decimals"]
+            cond_txt = "hedefin üzerine çıktı" if a["condition"] == ">" else "hedefin altına indi"
+            try:
+                await send_push(
+                    recipients=[a["deviceId"]],
+                    data={
+                        "title": f"🔔 {a['name']} hedefe ulaştı",
+                        "message": f"{BASIS_LABEL[a['basis']]} fiyatı {fmt_tr(price, dec)} oldu, {fmt_tr(a['target'], dec)} {cond_txt}.",
+                        "action_url": f"/product/{code}",
+                    },
+                    idempotency_key=f"{a['_id']}-{now}",
+                )
+            except Exception as e:
+                logger.warning("Push failed (non-blocking): %s", e)
+        elif not hit and a.get("triggeredAt"):
+            await db.alarms.update_one({"_id": a["_id"]}, {"$set": {"triggeredAt": None}})
+
+
+# ------------------------------------------------------------------ day high/low
+IST_TZ = ZoneInfo("Europe/Istanbul")
+
+
+async def day_range(code: str) -> dict:
+    now_ist = datetime.now(IST_TZ)
+    day_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
+    pipeline = [
+        {"$match": {"code": code, "ts": {"$gte": day_start}}},
+        {"$group": {"_id": None, "highSell": {"$max": "$sell"}, "lowSell": {"$min": "$sell"},
+                    "highBuy": {"$max": "$buy"}, "lowBuy": {"$min": "$buy"}}},
+    ]
+    rows = await db.price_history.aggregate(pipeline).to_list(1)
+    return rows[0] if rows else {}
 
 
 # ------------------------------------------------------------------ auth helpers
@@ -416,9 +586,22 @@ async def get_price(code: str):
         raise HTTPException(status_code=404, detail="Veri Yok")
     global_pub = await get_global("published")
     dec = market["decimals"]
-    priced = compute_price(market, cfg.get("published", default_rule()), global_pub, dec)
+    rule = cfg.get("published", default_rule())
+    priced = compute_price(market, rule, global_pub, dec)
     hist = await db.price_history.find({"code": code}).sort("ts", -1).limit(200).to_list(200)
     hist = list(reversed([{"buy": h["buy"], "sell": h["sell"], "ts": h["ts"]} for h in hist]))
+    # intraday high/low (published-price terms)
+    day = await day_range(code)
+    if day and day.get("highSell") is not None:
+        hi_m = {**market, "buyDec": str(day.get("highBuy")), "sellDec": str(day.get("highSell"))}
+        lo_m = {**market, "buyDec": str(day.get("lowBuy")), "sellDec": str(day.get("lowSell"))}
+        day_high = compute_price(hi_m, rule, global_pub, dec)["sell"]
+        day_low = compute_price(lo_m, rule, global_pub, dec)["sell"]
+        day_high = max(day_high, priced["sell"])
+        day_low = min(day_low, priced["sell"])
+    else:
+        day_high = priced["sell"]
+        day_low = priced["sell"]
     return {
         "code": code, "name": market["name"], "type": market["type"],
         "buy": priced["buy"], "sell": priced["sell"],
@@ -427,6 +610,8 @@ async def get_price(code: str):
         "status": feed_status(), "source": PROVIDER["source"],
         "providerUpdatedAt": market["providerUpdatedAt"],
         "receivedAt": market["receivedAt"],
+        "dayHigh": day_high,
+        "dayLow": day_low,
         "history": hist,
     }
 
@@ -541,6 +726,17 @@ async def update_product(code: str, body: ProductUpdate, _: dict = Depends(curre
     if update:
         await db.product_configs.update_one({"_id": code}, {"$set": update})
     return {"ok": True}
+
+
+class ReorderBody(BaseModel):
+    codes: list[str]
+
+
+@api_router.put("/admin/reorder")
+async def reorder_products(body: ReorderBody, _: dict = Depends(current_admin)):
+    for idx, code in enumerate(body.codes):
+        await db.product_configs.update_one({"_id": code}, {"$set": {"order": idx}})
+    return {"ok": True, "count": len(body.codes)}
 
 
 class GlobalUpdate(BaseModel):

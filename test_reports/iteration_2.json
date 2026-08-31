@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 2 (dayHigh/Low, alarms server-side, push relay, admin reorder, UI polish) PASSED end-to-end. Backend: 9/9 new-feature pytest cases green — /api/prices sorted by order, /api/prices/USD & /GA both satisfy dayLow<=sell<=dayHigh, /api/register-push returns 500 gracefully with placeholder EMERGENT_PUSH_KEY without crashing backend (subsequent /api/meta still 200), alarms POST/GET/PUT/DELETE flow verified — new alarm with condition '>' target=sell-5 was triggered by poller within ~20s (triggeredAt set), PUT active=false clears triggeredAt, DELETE soft-hides from GET; bad condition ('==') returns 400; /api/admin/reorder is 401 without token and correctly reverses currency order end-to-end (verified via /api/prices?type=currency), then restored. Frontend (mobile viewport 390x844): Market screen defaults to Döviz tab with USD/EUR/GBP/CHF visible and NO 'GA' present, columns 'ÜRÜN/ALIŞ/SATIŞ' rendered, no 'Altınkaynak' text on Market/Product-Detail/Calculator/Alarms/Settings (only present on admin dashboard as intended). view-toggle switches list<->card grid. Product detail shows GÜN İÇİ En Yüksek/En Düşük (testIDs day-high & day-low), range chips Gün/Hafta/... visible, Makas/Fark shown, Kaynak label removed. Calculator Çevirici: 5 USD -> 0,0351 GA; swap -> 712,2167 USD (round-trip math sane). Alarms Yeni Alarm Ekle -> target 30 -> Alarm Oluştur creates row (persisted to backend), delete works. Admin Yönetici Girişi -> login OK -> dashboard has admin-reorder-btn -> reorder screen loads 39 draggable rows (reorder-row-USD present) + 'Sıralamayı Kaydet' button.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "pointerEvents prop", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' — non-blocking web deprecation. Reference: any component passing pointerEvents='none' prop."},
+      {"component": "shadow* style props", "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\"' — replace shadowColor/shadowOffset/shadowOpacity/shadowRadius with boxShadow for RN web. Reference: search /app/frontend for shadowColor|shadowOpacity."},
+      {"component": "expo-notifications on web", "issue": "Console: 'Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.' — expected in preview; ensure native build for real push delivery. Reference: /app/frontend/src/utils/push.ts (listener registration path)."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_onlinekur_api.py",
+    "/app/test_reports/pytest/iter2_new_features.xml"
+  ],
+  "action_items": [
+    "Optional cleanup: migrate `pointerEvents` prop -> `style={{pointerEvents:'none'}}` and `shadow*` style props -> `boxShadow` to silence RN web deprecation warnings.",
+    "For real push delivery, replace placeholder EMERGENT_PUSH_KEY and build a native binary — web preview cannot receive push."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew from 618 -> 813 lines (approaching split-threshold). Consider splitting into modules (poller, alarms, push, admin, prices, auth) before next iteration.",
+    "check_alarms wraps send_push in try/except (good — placeholder key won't block triggeredAt persistence, verified in tests).",
+    "day_range uses Europe/Istanbul TZ midnight boundary — correct for TR market; falls back to current price when no history yet.",
+    "AlarmCreate validates basis/condition/target>0 and returns 400 on invalid — verified.",
+    "PUT /api/alarms/{id} correctly resets triggeredAt when active toggled (re-arm on next hit) — verified.",
+    "DELETE /api/alarms/{id} is soft-delete via {deleted:true}; GET filters {deleted:false} — verified idempotent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9 new features + 15/15 iter1 regression still available)", "frontend": "100% (all requested flows verified)"},
+  "seed_data_creation": "Alarms test uses ephemeral deviceId (uuid4) and cleans up any created alarm via DELETE in fixture teardown. Reorder test restores original order in finally.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend at https://premium-kur.preview.emergentagent.com. Admin admin@onlinekur.com/OnlineKur2026!Admin. Two pytest files: test_onlinekur_api.py (iter1 core+auth+margin+manual+global-margin) and test_new_features.py (iter2 dayHigh/Low+alarms+register-push+reorder). Poller interval 10s so alarm trigger test waits up to 24s. EMERGENT_PUSH_KEY is placeholder => /api/register-push returns 500 by design; backend never crashes. On web preview, expo-notifications is not fully supported (expected)."
+}

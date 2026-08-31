@@ -8,7 +8,6 @@ interface PricesCtx {
   items: PriceItem[];
   feedStatus: string;
   lastSuccess: string | null;
-  source: string;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -21,7 +20,6 @@ export function PricesProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<PriceItem[]>([]);
   const [feedStatus, setFeedStatus] = useState("guncel");
   const [lastSuccess, setLastSuccess] = useState<string | null>(null);
-  const [source, setSource] = useState("Altınkaynak");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<any>(null);
@@ -32,7 +30,6 @@ export function PricesProvider({ children }: { children: React.ReactNode }) {
       setItems(data.items);
       setFeedStatus(data.feedStatus);
       setLastSuccess(data.lastSuccess);
-      setSource(data.source);
       setError(null);
     } catch (e: any) {
       setError(e?.message || "Bağlantı hatası");
@@ -56,7 +53,7 @@ export function PricesProvider({ children }: { children: React.ReactNode }) {
   const byCode = useCallback((code: string) => items.find((i) => i.code === code), [items]);
 
   return (
-    <Ctx.Provider value={{ items, feedStatus, lastSuccess, source, loading, error, refresh, byCode }}>
+    <Ctx.Provider value={{ items, feedStatus, lastSuccess, loading, error, refresh, byCode }}>
       {children}
     </Ctx.Provider>
   );

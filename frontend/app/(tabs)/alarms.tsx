@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, Switch, TextInput, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,13 +6,14 @@ import { useTheme } from "@/src/theme/ThemeContext";
 import { usePrices } from "@/src/context/PricesContext";
 import { useAlarms, Alarm } from "@/src/context/AlarmsContext";
 import { Sheet } from "@/src/components/Sheet";
+import { requestPushForAlarms } from "@/src/utils/push";
 import { formatNumber, formatTime, parseTR } from "@/src/utils/format";
 
 export default function AlarmsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { items, byCode } = usePrices();
-  const { alarms, add, remove, toggle, setTriggered } = useAlarms();
+  const { alarms, add, remove, toggle } = useAlarms();
 
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -20,29 +21,23 @@ export default function AlarmsScreen() {
   const [basis, setBasis] = useState<"buy" | "sell">("sell");
   const [condition, setCondition] = useState<">" | "<">(">");
   const [target, setTarget] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const asset = useMemo(() => items.find((i) => i.code === code), [items, code]);
 
-  // Evaluate alarms whenever prices update.
-  useEffect(() => {
-    alarms.forEach((a) => {
-      if (!a.active) return;
-      const item = byCode(a.code);
-      const price = item ? (a.basis === "buy" ? item.buy : item.sell) : null;
-      if (price == null) return;
-      const hit = a.condition === ">" ? price > a.target : price < a.target;
-      if (hit && !a.triggeredAt) setTriggered(a.id, new Date().toISOString());
-      if (!hit && a.triggeredAt) setTriggered(a.id, null);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
-
-  const submit = () => {
+  const submit = async () => {
     const t = parseTR(target);
-    if (!asset || isNaN(t) || t <= 0) return;
-    add({ code: asset.code, name: asset.name, basis, condition, target: t });
-    setTarget("");
-    setOpen(false);
+    if (!asset || isNaN(t) || t <= 0 || saving) return;
+    setSaving(true);
+    try {
+      await add({ code: asset.code, name: asset.name, basis, condition, target: t });
+      setTarget("");
+      setOpen(false);
+      // Contextual permission request — user just created an alarm.
+      requestPushForAlarms();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const renderAlarm = ({ item: a }: { item: Alarm }) => {
@@ -92,7 +87,7 @@ export default function AlarmsScreen() {
         <View style={styles.center}>
           <Ionicons name="notifications-outline" size={48} color={colors.textTertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Aktif alarmınız bulunmuyor</Text>
-          <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>Bir ürün için hedef fiyat belirleyin, fiyat ulaşınca burada işaretlenir.</Text>
+          <Text style={[styles.emptyTxt, { color: colors.textSecondary }]}>Bir ürün için hedef fiyat belirleyin; fiyat hedefe ulaşınca telefonunuza bildirim gönderilir.</Text>
         </View>
       ) : (
         <FlatList
@@ -152,9 +147,15 @@ export default function AlarmsScreen() {
             style={[styles.input, { backgroundColor: colors.card2, borderColor: colors.border, color: colors.text }]}
           />
 
-          <Pressable testID="alarm-save" onPress={submit} style={[styles.saveBtn, { backgroundColor: colors.gold }]}>
+          <Pressable testID="alarm-save" onPress={submit} style={[styles.saveBtn, { backgroundColor: colors.gold, opacity: saving ? 0.7 : 1 }]}>
             <Text style={{ color: colors.onGold, fontWeight: "800", fontSize: 15 }}>Alarm Oluştur</Text>
           </Pressable>
+          <View style={styles.noteRow}>
+            <Ionicons name="notifications-outline" size={14} color={colors.textTertiary} />
+            <Text style={[styles.noteTxt, { color: colors.textTertiary }]}>
+              Hedefe ulaşınca telefonunuza anlık bildirim gönderilir. Bunun için bildirim izni istenir.
+            </Text>
+          </View>
         </ScrollView>
       </Sheet>
 
@@ -210,6 +211,8 @@ const styles = StyleSheet.create({
   toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: "center" },
   input: { fontSize: 18, fontWeight: "700", padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, fontVariant: ["tabular-nums"] },
   saveBtn: { marginTop: 24, paddingVertical: 15, borderRadius: 14, alignItems: "center" },
+  noteRow: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 12, paddingHorizontal: 4 },
+  noteTxt: { fontSize: 12, lineHeight: 17, flex: 1 },
   pickRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickName: { fontSize: 15, fontWeight: "600" },
   pickCode: { fontSize: 12, marginTop: 2 },

@@ -101,3 +101,17 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Iteration 2 — 2026-06 (Feature batch: UI overhaul + alarms push + admin reorder)
+
+Main agent implemented:
+1. Source hiding: "Altınkaynak" removed from ALL user-facing screens (market header, product detail stats, settings). Admin screens still show provider name (intentional, admin-only).
+2. Market screen: default filter now "Döviz" (currency), sticky column header (ÜRÜN/ALIŞ/SATIŞ), list/card view toggle button (persisted in settings as marketView), search unchanged.
+3. Product detail (/product/[code]): new "GÜN İÇİ" section with live day high/low (backend computes from today's price_history in Europe/Istanbul terms, fields dayHigh/dayLow on GET /api/prices/{code}); chart range chips relabeled (Gün/Hafta/Ay/3 Ay/6 Ay/Yıl); chart caption shows range min/max; "Kaynak" stat replaced with "Makas (Fark)".
+4. Calculator: new mode toggle "TL Karşılığı" | "Çevirici" — converter converts between any two products (amount × fromRate / toRate) with swap button and TL intermediate display.
+5. Alarms: now server-side. Backend: POST/GET/PUT/DELETE /api/alarms (deviceId-scoped, soft delete), alarm engine runs after each poll (10s) — sets triggeredAt, re-arms when condition releases, sends push via Emergent relay (POST /api/register-push + send_push helper, EMERGENT_PUSH_KEY=placeholder). Frontend: AlarmsContext synced with backend, deviceId generated locally, contextual push permission request after alarm creation (works only on native builds, not web/Expo Go).
+6. Admin reorder: new screen /admin/reorder — custom drag&drop (long-press 180ms, reanimated), PUT /api/admin/reorder {codes} sets order immediately (not draft-gated). "Sırala" button on admin dashboard.
+
+Test focus:
+- backend: /api/alarms CRUD, alarm trigger behavior (create alarm with target below current price → triggeredAt set within ~15s), /api/prices/{code} has dayHigh/dayLow >= /<= sell, /api/admin/reorder (auth required) changes order in /api/prices, /api/register-push returns 500/502 gracefully with placeholder key (should NOT crash).
+- frontend: market default tab Döviz, column headers visible, view toggle switches to 2-col cards, no "Altınkaynak" text anywhere user-facing, product detail day high/low + chart, calculator converter mode, alarms create/toggle/delete via backend, admin login + Sırala screen loads.
+- Admin creds in /app/memory/test_credentials.md

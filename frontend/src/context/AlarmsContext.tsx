@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { storage } from "@/src/utils/storage";
-
-const KEY = "onlinekur.alarms";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { api } from "@/src/api/client";
+import { getDeviceId } from "@/src/utils/device";
+import { registerPushSilently } from "@/src/utils/push";
 
 export interface Alarm {
   id: string;
@@ -17,49 +17,70 @@ export interface Alarm {
 
 interface AlarmsCtx {
   alarms: Alarm[];
-  add: (a: Omit<Alarm, "id" | "triggeredAt" | "createdAt" | "active">) => void;
-  remove: (id: string) => void;
-  toggle: (id: string) => void;
-  setTriggered: (id: string, ts: string | null) => void;
+  add: (a: { code: string; name: string; basis: "buy" | "sell"; condition: ">" | "<"; target: number }) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  toggle: (id: string) => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<AlarmsCtx | null>(null);
 
 export function AlarmsProvider({ children }: { children: React.ReactNode }) {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const registered = useRef(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const deviceId = await getDeviceId();
+      const data = await api.getAlarms(deviceId);
+      setAlarms(data.items || []);
+      // Refresh push token silently once per session if user already granted permission.
+      if (!registered.current && (data.items || []).length > 0) {
+        registered.current = true;
+        registerPushSilently();
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      const saved = await storage.getItem<Alarm[]>(KEY, []);
-      if (Array.isArray(saved)) setAlarms(saved);
-    })();
+    refresh();
+    const t = setInterval(refresh, 15000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const add = useCallback(
+    async (a: { code: string; name: string; basis: "buy" | "sell"; condition: ">" | "<"; target: number }) => {
+      const deviceId = await getDeviceId();
+      const created = await api.createAlarm({ deviceId, ...a });
+      setAlarms((prev) => [created, ...prev]);
+    },
+    [],
+  );
+
+  const remove = useCallback(async (id: string) => {
+    setAlarms((prev) => prev.filter((x) => x.id !== id));
+    try {
+      await api.deleteAlarm(id);
+    } catch {}
   }, []);
 
-  const persist = (next: Alarm[]) => {
-    storage.setItem(KEY, next);
-    return next;
-  };
-
-  const add = useCallback((a: Omit<Alarm, "id" | "triggeredAt" | "createdAt" | "active">) => {
+  const toggle = useCallback(async (id: string) => {
+    let next = false;
     setAlarms((prev) =>
-      persist([
-        ...prev,
-        { ...a, id: String(Date.now()), triggeredAt: null, active: true, createdAt: new Date().toISOString() },
-      ]),
+      prev.map((x) => {
+        if (x.id === id) {
+          next = !x.active;
+          return { ...x, active: next, triggeredAt: null };
+        }
+        return x;
+      }),
     );
+    try {
+      await api.updateAlarm(id, next);
+    } catch {}
   }, []);
 
-  const remove = useCallback((id: string) => setAlarms((prev) => persist(prev.filter((x) => x.id !== id))), []);
-  const toggle = useCallback(
-    (id: string) => setAlarms((prev) => persist(prev.map((x) => (x.id === id ? { ...x, active: !x.active, triggeredAt: null } : x)))),
-    [],
-  );
-  const setTriggered = useCallback(
-    (id: string, ts: string | null) => setAlarms((prev) => persist(prev.map((x) => (x.id === id ? { ...x, triggeredAt: ts } : x)))),
-    [],
-  );
-
-  return <Ctx.Provider value={{ alarms, add, remove, toggle, setTriggered }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ alarms, add, remove, toggle, refresh }}>{children}</Ctx.Provider>;
 }
 
 export function useAlarms(): AlarmsCtx {

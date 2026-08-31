@@ -57,10 +57,12 @@ function PriceRowBase({ item, onPress, showStar = true }: Props) {
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.up, pointerEvents: "none" }, upStyle]} />
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.down, pointerEvents: "none" }, downStyle]} />
 
-      {showStar && (
+      {showStar ? (
         <Pressable testID={`fav-${item.code}`} hitSlop={10} onPress={() => toggle(item.code)} style={styles.star}>
           <Ionicons name={fav ? "star" : "star-outline"} size={18} color={fav ? colors.gold : colors.textTertiary} />
         </Pressable>
+      ) : (
+        <View style={{ width: 28 }} />
       )}
 
       <View style={styles.info}>
@@ -68,7 +70,7 @@ function PriceRowBase({ item, onPress, showStar = true }: Props) {
           {item.name}
         </Text>
         <View style={styles.metaRow}>
-          <Text style={[styles.code, { color: colors.textSecondary }]}>{item.code}</Text>
+          <Text style={[styles.code, { color: colors.textTertiary }]}>{item.code}</Text>
           {isStale && (
             <Text style={[styles.staleTag, { color: colors.warning }]}> · {STATUS_LABEL[item.status]}</Text>
           )}
@@ -76,15 +78,8 @@ function PriceRowBase({ item, onPress, showStar = true }: Props) {
         </View>
       </View>
 
-      <View style={styles.priceCol}>
-        <Text style={[styles.label, { color: colors.textTertiary }]}>Alış</Text>
-        <Text style={[styles.price, { color: colors.text }]}>{noData ? "—" : formatNumber(item.buy, dec)}</Text>
-      </View>
-
-      <View style={styles.priceCol}>
-        <Text style={[styles.label, { color: colors.textTertiary }]}>Satış</Text>
-        <Text style={[styles.price, { color: colors.text }]}>{noData ? "—" : formatNumber(item.sell, dec)}</Text>
-      </View>
+      <Text style={[styles.buy, { color: colors.textSecondary }]}>{noData ? "—" : formatNumber(item.buy, dec)}</Text>
+      <Text style={[styles.sell, { color: colors.text }]}>{noData ? "—" : formatNumber(item.sell, dec)}</Text>
 
       <View style={styles.dir}>
         <Ionicons name={arrow as any} size={16} color={arrowColor} />
@@ -97,20 +92,19 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
-  star: { marginRight: 10 },
+  star: { width: 28 },
   info: { flex: 1, paddingRight: 8 },
   name: { fontSize: 15, fontWeight: "600", letterSpacing: -0.2 },
   metaRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   code: { fontSize: 12, fontWeight: "500" },
   staleTag: { fontSize: 11, fontWeight: "600" },
-  priceCol: { width: 92, alignItems: "flex-end" },
-  label: { fontSize: 10, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 },
-  price: { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"], letterSpacing: -0.2 },
+  buy: { width: 96, textAlign: "right", fontSize: 14.5, fontWeight: "500", fontVariant: ["tabular-nums"], letterSpacing: -0.2 },
+  sell: { width: 96, textAlign: "right", fontSize: 15.5, fontWeight: "800", fontVariant: ["tabular-nums"], letterSpacing: -0.2 },
   dir: { width: 24, alignItems: "center", marginLeft: 4 },
 });
 

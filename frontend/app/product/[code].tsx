@@ -11,7 +11,14 @@ import { LineChart } from "@/src/components/LineChart";
 import { StatusPill } from "@/src/components/StatusPill";
 import { formatNumber, providerTimeOnly } from "@/src/utils/format";
 
-const RANGES = ["1G", "1H", "1A", "3A", "6A", "1Y"];
+const RANGES = [
+  { label: "Gün", value: "1G" },
+  { label: "Hafta", value: "1H" },
+  { label: "Ay", value: "1A" },
+  { label: "3 Ay", value: "3A" },
+  { label: "6 Ay", value: "6A" },
+  { label: "Yıl", value: "1Y" },
+];
 
 export default function ProductDetail() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -138,17 +145,36 @@ export default function ProductDetail() {
           )}
         </View>
 
+        {/* Intraday high / low */}
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GÜN İÇİ</Text>
+        <View style={styles.dayRow}>
+          <View style={[styles.dayBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.dayLabelRow}>
+              <Ionicons name="trending-up" size={14} color={colors.up} />
+              <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>En Yüksek</Text>
+            </View>
+            <Text testID="day-high" style={[styles.dayValue, { color: colors.up }]}>{formatNumber(detail.dayHigh, dec)}</Text>
+          </View>
+          <View style={[styles.dayBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.dayLabelRow}>
+              <Ionicons name="trending-down" size={14} color={colors.down} />
+              <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>En Düşük</Text>
+            </View>
+            <Text testID="day-low" style={[styles.dayValue, { color: colors.down }]}>{formatNumber(detail.dayLow, dec)}</Text>
+          </View>
+        </View>
+
         {/* Chart */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GÜN İÇİ HAREKET</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>FİYAT GRAFİĞİ</Text>
         <View style={styles.rangeRow}>
           {RANGES.map((r) => (
             <Pressable
-              key={r}
-              testID={`range-${r}`}
-              onPress={() => setRange(r)}
-              style={[styles.rangeBtn, { backgroundColor: range === r ? colors.gold : colors.card2, borderColor: colors.border }]}
+              key={r.value}
+              testID={`range-${r.value}`}
+              onPress={() => setRange(r.value)}
+              style={[styles.rangeBtn, { backgroundColor: range === r.value ? colors.gold : colors.card2, borderColor: colors.border }]}
             >
-              <Text style={{ color: range === r ? colors.onGold : colors.textSecondary, fontWeight: "700", fontSize: 12 }}>{r}</Text>
+              <Text style={{ color: range === r.value ? colors.onGold : colors.textSecondary, fontWeight: "700", fontSize: 11.5 }}>{r.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -158,7 +184,17 @@ export default function ProductDetail() {
               <ActivityIndicator color={colors.gold} />
             </View>
           ) : points.length >= 2 ? (
-            <LineChart values={points} width={width - 64} height={160} />
+            <>
+              <LineChart values={points} width={width - 64} height={160} />
+              <View style={styles.chartCaption}>
+                <Text style={[styles.chartCapTxt, { color: colors.down }]}>
+                  En Düşük {formatNumber(Math.min(...points), dec)}
+                </Text>
+                <Text style={[styles.chartCapTxt, { color: colors.up }]}>
+                  En Yüksek {formatNumber(Math.max(...points), dec)}
+                </Text>
+              </View>
+            </>
           ) : (
             <View style={styles.chartEmpty}>
               <Ionicons name="analytics-outline" size={32} color={colors.textTertiary} />
@@ -175,7 +211,7 @@ export default function ProductDetail() {
           <Stat label="Piyasa Alış" value={formatNumber(detail.marketBuy, dec)} />
           <Stat label="Piyasa Satış" value={formatNumber(detail.marketSell, dec)} />
           <Stat label="Son Güncelleme" value={providerTimeOnly(detail.providerUpdatedAt)} />
-          <Stat label="Kaynak" value={detail.source} accent={colors.gold} />
+          <Stat label="Makas (Fark)" value={formatNumber(detail.sell - detail.buy, dec)} accent={colors.gold} />
         </View>
       </ScrollView>
     </View>
@@ -200,6 +236,13 @@ const styles = StyleSheet.create({
   manualTag: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 14, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   manualTxt: { fontSize: 11.5, fontWeight: "700" },
   sectionTitle: { fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginTop: 24, marginBottom: 10, marginLeft: 2 },
+  dayRow: { flexDirection: "row", gap: 10 },
+  dayBox: { flex: 1, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
+  dayLabelRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  dayLabel: { fontSize: 12, fontWeight: "600" },
+  dayValue: { fontSize: 19, fontWeight: "800", marginTop: 6, fontVariant: ["tabular-nums"], letterSpacing: -0.3 },
+  chartCaption: { flexDirection: "row", justifyContent: "space-between", marginTop: 10, paddingHorizontal: 2 },
+  chartCapTxt: { fontSize: 12, fontWeight: "700", fontVariant: ["tabular-nums"] },
   rangeRow: { flexDirection: "row", gap: 6, marginBottom: 10 },
   rangeBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
   chartCard: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, minHeight: 180, justifyContent: "center" },

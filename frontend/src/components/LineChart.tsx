@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View } from "react-native";
 import Svg, { Path, Line, Circle } from "react-native-svg";
 import { useTheme } from "@/src/theme/ThemeContext";
 
@@ -37,11 +37,14 @@ export function LineChart({ values, width, height }: Props) {
         {[0.25, 0.5, 0.75].map((f) => (
           <Line key={f} x1={pad} y1={pad + f * h} x2={width - pad} y2={pad + f * h} stroke={colors.border} strokeWidth={1} />
         ))}
+        <Path
+          d={`${d} L${last.x.toFixed(2)},${(height - pad).toFixed(2)} L${points[0].x.toFixed(2)},${(height - pad).toFixed(2)} Z`}
+          fill={stroke}
+          fillOpacity={0.08}
+        />
         <Path d={d} stroke={stroke} strokeWidth={2} fill="none" strokeLinejoin="round" strokeLinecap="round" />
         <Circle cx={last.x} cy={last.y} r={3.5} fill={stroke} />
       </Svg>
     </View>
   );
 }
-
-const styles = StyleSheet.create({});

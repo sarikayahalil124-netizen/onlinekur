@@ -11,7 +11,7 @@ import { formatTime } from "@/src/utils/format";
 export default function SettingsScreen() {
   const { colors, mode, setMode } = useTheme();
   const { extraDecimals, update } = useSettings();
-  const { source, lastSuccess } = usePrices();
+  const { lastSuccess } = usePrices();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -75,14 +75,7 @@ export default function SettingsScreen() {
           </Row>
         </Section>
 
-        <Section title="VERİ KAYNAĞI">
-          <Row>
-            <Ionicons name="server-outline" size={20} color={colors.textSecondary} />
-            <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.text }]}>Piyasa Verisi</Text>
-            </View>
-            <Text style={[styles.rowValue, { color: colors.gold }]}>{source}</Text>
-          </Row>
+        <Section title="VERİ">
           <Row last>
             <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
             <View style={styles.rowText}>

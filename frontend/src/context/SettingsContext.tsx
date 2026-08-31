@@ -6,9 +6,10 @@ const KEY = "onlinekur.settings";
 export interface AppSettings {
   extraDecimals: boolean; // show one extra decimal place
   priceBasis: "sell" | "buy"; // default emphasis
+  marketView: "list" | "card"; // market screen layout
 }
 
-const DEFAULT: AppSettings = { extraDecimals: false, priceBasis: "sell" };
+const DEFAULT: AppSettings = { extraDecimals: false, priceBasis: "sell", marketView: "list" };
 
 interface SettingsCtx extends AppSettings {
   update: (patch: Partial<AppSettings>) => void;
