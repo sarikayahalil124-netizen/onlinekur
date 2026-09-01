@@ -6,11 +6,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, createAudioPlayer } from "expo-audio";
 import { useTheme } from "@/src/theme/ThemeContext";
 import { useAlarms } from "@/src/context/AlarmsContext";
 import { api } from "@/src/api/client";
 import { getDeviceId } from "@/src/utils/device";
+
+const ttsPlayer = createAudioPlayer();
 
 interface Msg {
   role: "user" | "assistant";
@@ -34,9 +36,49 @@ export default function AssistantScreen() {
   const [initing, setIniting] = useState(true);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const [ttsLoadingIdx, setTtsLoadingIdx] = useState<number | null>(null);
   const listRef = useRef<FlatList<Msg>>(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const { refresh: refreshAlarms } = useAlarms();
+
+  useEffect(() => {
+    const sub = ttsPlayer.addListener("playbackStatusUpdate", (status: any) => {
+      if (status?.didJustFinish) setSpeakingIdx(null);
+    });
+    return () => {
+      sub?.remove?.();
+      try {
+        ttsPlayer.pause();
+      } catch {}
+    };
+  }, []);
+
+  const speak = useCallback(
+    async (idx: number, text: string) => {
+      // toggle off if this message is already speaking
+      if (speakingIdx === idx) {
+        try {
+          ttsPlayer.pause();
+        } catch {}
+        setSpeakingIdx(null);
+        return;
+      }
+      setTtsLoadingIdx(idx);
+      try {
+        const { url } = await api.aiTts(text);
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+        ttsPlayer.replace({ uri: url });
+        ttsPlayer.play();
+        setSpeakingIdx(idx);
+      } catch {
+        // silent fail; user still has the text
+      } finally {
+        setTtsLoadingIdx(null);
+      }
+    },
+    [speakingIdx],
+  );
 
   useEffect(() => {
     (async () => {
@@ -153,7 +195,7 @@ export default function AssistantScreen() {
     } catch {}
   }, []);
 
-  const renderMsg = ({ item }: { item: Msg }) => {
+  const renderMsg = ({ item, index }: { item: Msg; index: number }) => {
     const isUser = item.role === "user";
     return (
       <View
@@ -168,6 +210,23 @@ export default function AssistantScreen() {
         <Text style={{ color: isUser ? colors.onGold : colors.text, fontSize: 14.5, lineHeight: 21 }}>
           {item.content}
         </Text>
+        {!isUser && (
+          <Pressable
+            testID={`ai-speak-${index}`}
+            onPress={() => speak(index, item.content)}
+            hitSlop={8}
+            style={[styles.speakBtn, { borderTopColor: colors.border }]}
+          >
+            {ttsLoadingIdx === index ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : (
+              <Ionicons name={speakingIdx === index ? "stop-circle" : "volume-high"} size={16} color={colors.gold} />
+            )}
+            <Text style={[styles.speakTxt, { color: colors.gold }]}>
+              {speakingIdx === index ? "Durdur" : "Sesli oku"}
+            </Text>
+          </Pressable>
+        )}
       </View>
     );
   };
@@ -297,6 +356,8 @@ const styles = StyleSheet.create({
   quick: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   quickTxt: { flex: 1, fontSize: 14.5, fontWeight: "600" },
   bubble: { maxWidth: "85%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
+  speakBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, paddingTop: 7, borderTopWidth: StyleSheet.hairlineWidth },
+  speakTxt: { fontSize: 12, fontWeight: "700" },
   inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   micBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: StyleSheet.hairlineWidth },
   input: { flex: 1, maxHeight: 120, minHeight: 44, fontSize: 15, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 11, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },

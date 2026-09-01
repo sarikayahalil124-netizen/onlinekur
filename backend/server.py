@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -7,6 +7,7 @@ import os
 import re
 import json
 import time
+import hashlib
 import asyncio
 import logging
 import tempfile
@@ -818,13 +819,27 @@ async def revert_draft(_: dict = Depends(current_admin)):
 
 # ------------------------------------------------------------------ AI assistant (Gemini 3.5 Flash via Emergent LLM key)
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.llm.openai import OpenAISpeechToText
+from emergentintegrations.llm.openai import OpenAISpeechToText, OpenAITextToSpeech
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 AI_PROVIDER = "gemini"
 AI_MODEL = "gemini-3.5-flash"
 
 stt_client = OpenAISpeechToText(EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+tts_client = OpenAITextToSpeech(api_key=EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
+TTS_MODEL = "tts-1"
+TTS_VOICE = "nova"
+TTS_DIR = Path(tempfile.gettempdir()) / "onlinekur_tts"
+TTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def clean_for_tts(text: str) -> str:
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"`{1,3}[^`]*`{1,3}", "", text)
+    text = re.sub(r"[*_#>~|`]", "", text)
+    # strip most emoji / pictographic symbols
+    text = re.sub(r"[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u2190-\u21FF\u2B00-\u2BFF]", "", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 AI_PERSONA = (
     "Sen 'ONLİNE KUR' uygulamasının Türkçe konuşan altın ve döviz piyasası asistanısın. "
@@ -1005,6 +1020,45 @@ async def ai_transcribe(file: UploadFile = File(...)):
                 os.unlink(tmp_path)
             except FileNotFoundError:
                 pass
+
+
+class TtsBody(BaseModel):
+    text: str
+
+
+@api_router.post("/ai/tts")
+async def ai_tts(body: TtsBody):
+    if tts_client is None:
+        raise HTTPException(503, "Seslendirme yapılandırılmamış")
+    text = clean_for_tts(body.text)[:4000]
+    if not text:
+        raise HTTPException(400, "Seslendirilecek metin yok")
+    key = hashlib.sha256(f"{text}|{TTS_VOICE}|1.0|{TTS_MODEL}|mp3".encode()).hexdigest()
+    path = TTS_DIR / f"{key}.mp3"
+    if not path.exists():
+        try:
+            audio = await tts_client.generate_speech(
+                text=text, model=TTS_MODEL, voice=TTS_VOICE, response_format="mp3"
+            )
+        except Exception as e:
+            logger.warning("TTS error: %s", e)
+            raise HTTPException(502, "Ses üretilemedi")
+        path.write_bytes(audio)
+    return {"url": f"/ai/tts-audio/{key}.mp3"}
+
+
+@api_router.get("/ai/tts-audio/{key}.mp3")
+async def ai_tts_audio(key: str):
+    if not re.fullmatch(r"[a-f0-9]{64}", key):
+        raise HTTPException(404, "Bulunamadı")
+    path = TTS_DIR / f"{key}.mp3"
+    if not path.exists():
+        raise HTTPException(404, "Ses bulunamadı")
+    return Response(
+        content=path.read_bytes(),
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=31536000"},
+    )
 
 
 @api_router.post("/ai/commentary")

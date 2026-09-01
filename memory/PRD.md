@@ -84,3 +84,10 @@ K/Z düzeltmesi: toplam kâr/zarar artık YALNIZCA alış fiyatı girilmiş varl
 Test: iteration_5 — backend 10/10, tüm frontend akışları geçti. USD 5@45 + GA 2 → K/Z +%7,20 doğru; donut %98,3 altın / %1,7 döviz; sohbetten "USD 70 olunca haber ver" → Alarmlar sekmesinde alarm oluştu.
 
 ⚠ Sesli soru (mikrofon) ve alarm sesi/push yalnızca native build'de gerçek cihazda tam çalışır (Expo Go/web'de sınırlı).
+
+## Iteration 6 (2026-06) — COMPLETED & tested (backend 12/12 + frontend)
+Kullanıcı isteği: **Sesli Yanıt** — AI Danışman cevaplarını sesli okusun.
+- Backend: Emergent-managed OpenAI TTS (`emergentintegrations.OpenAITextToSpeech`, model `tts-1`, voice `nova`, mp3). `POST /api/ai/tts {text}` → metni temizler (emoji/markdown/url), sha256 ile diske cache'ler, `{url}` döner. `GET /api/ai/tts-audio/{key}.mp3` → audio/mpeg (regex korumalı, cache header). `hashlib` import eklendi.
+- Frontend: AI Danışman'daki her asistan baloncuğunda "Sesli oku" butonu (`ai-speak-{index}`). `expo-audio` `createAudioPlayer` (modül düzeyi tek örnek), oynatmadan önce `setAudioModeAsync({allowsRecording:false, playsInSilentMode:true})`, bitince otomatik durur, ekrandan çıkınca temizlenir. Toggle: Sesli oku ↔ Durdur.
+- ⚠ OpenAI sesleri İngilizce optimize; Türkçe okuma hafif aksanlı olabilir (sağlayıcı sınırı). Sesli oynatma en iyi gerçek cihazda çalışır.
+Test: iteration_6 — backend 12/12, frontend buton render + toggle + play doğrulandı.

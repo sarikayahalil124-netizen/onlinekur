@@ -74,6 +74,10 @@ export const api = {
   aiCommentary: (): Promise<{ commentary: string; at: string }> => req(`/ai/commentary`, { method: "POST" }),
   aiPortfolioAdvice: (holdings: any[]): Promise<{ advice: string; totalValue: number; totalCost: number }> =>
     req(`/ai/portfolio-advice`, { method: "POST", body: JSON.stringify({ holdings }) }),
+  async aiTts(text: string): Promise<{ url: string }> {
+    const r = await req(`/ai/tts`, { method: "POST", body: JSON.stringify({ text }) });
+    return { url: `${BASE}${r.url}` };
+  },
   async aiTranscribe(fileUri: string, mime: string, name: string): Promise<{ text: string }> {
     const form = new FormData();
     form.append("file", { uri: fileUri, name, type: mime } as any);
