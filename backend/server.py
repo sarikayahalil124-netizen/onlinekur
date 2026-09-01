@@ -1,13 +1,15 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import re
+import json
 import time
 import asyncio
 import logging
+import tempfile
 from pathlib import Path
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from datetime import datetime, timedelta, timezone
@@ -816,10 +818,13 @@ async def revert_draft(_: dict = Depends(current_admin)):
 
 # ------------------------------------------------------------------ AI assistant (Gemini 3.5 Flash via Emergent LLM key)
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 AI_PROVIDER = "gemini"
 AI_MODEL = "gemini-3.5-flash"
+
+stt_client = OpenAISpeechToText(EMERGENT_LLM_KEY) if EMERGENT_LLM_KEY else None
 
 AI_PERSONA = (
     "Sen 'ONLİNE KUR' uygulamasının Türkçe konuşan altın ve döviz piyasası asistanısın. "
@@ -873,6 +878,47 @@ def _ai_chat(system_message: str, session_id: str) -> LlmChat:
     ).with_model(AI_PROVIDER, AI_MODEL)
 
 
+async def _codes_catalog() -> dict:
+    """code -> name for all active products (for AI alarm intent)."""
+    configs = await db.product_configs.find({"active": True}).to_list(1000)
+    out = {}
+    for cfg in configs:
+        code = cfg["_id"]
+        market = MARKET.get(code)
+        out[code] = (market or {}).get("name") or cfg.get("name", code)
+    return out
+
+
+ALARM_DIRECTIVE_RE = re.compile(r"\[\[ALARM:\s*(\{.*?\})\s*\]\]", re.DOTALL)
+
+
+async def _handle_alarm_directive(reply: str, device_id: str, catalog: dict):
+    """If the AI emitted an [[ALARM:{...}]] directive, create the alarm and strip it."""
+    m = ALARM_DIRECTIVE_RE.search(reply)
+    if not m:
+        return reply, None
+    cleaned = ALARM_DIRECTIVE_RE.sub("", reply).strip()
+    try:
+        spec = json.loads(m.group(1))
+        code = str(spec.get("code", "")).upper()
+        basis = spec.get("basis", "sell")
+        condition = spec.get("condition", ">")
+        target = float(spec.get("target"))
+    except Exception:
+        return cleaned, None
+    if code not in catalog or basis not in ("buy", "sell") or condition not in (">", "<") or target <= 0:
+        return cleaned, None
+    doc = {
+        "deviceId": device_id, "code": code, "name": catalog[code],
+        "basis": basis, "condition": condition, "target": target,
+        "active": True, "deleted": False, "triggeredAt": None,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.alarms.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return cleaned, alarm_out(doc)
+
+
 class AiChatBody(BaseModel):
     deviceId: str
     message: str
@@ -896,26 +942,69 @@ async def ai_chat(body: AiChatBody):
     if not msg:
         raise HTTPException(400, "Mesaj boş")
     snapshot = await market_snapshot_text()
+    catalog = await _codes_catalog()
+    code_list = ", ".join(f"{c}={n}" for c, n in list(catalog.items())[:60])
     prev = await db.ai_messages.find({"deviceId": body.deviceId}).sort("ts", -1).to_list(10)
     prev.reverse()
     transcript = "\n".join(
         f"{'Kullanıcı' if m['role'] == 'user' else 'Asistan'}: {m['content']}" for m in prev
     )
-    system = AI_PERSONA + "\n\n" + snapshot
+    alarm_rules = (
+        "\n\nALARM KURMA: Kullanıcı bir ürün belirli bir fiyata gelince/geçince/düşünce haber "
+        "verilmesini isterse (ör. 'USD 50 olunca haber ver', 'gram altın 7000'in altına inince "
+        "uyar'), yanıtının EN SONUNA ayrı bir satırda tam olarak şu formatta gizli bir komut ekle: "
+        "[[ALARM:{\"code\":\"USD\",\"basis\":\"sell\",\"condition\":\">\",\"target\":50}]] — "
+        "condition: fiyat hedefin üstüne çıkınca '>', altına inince '<'. basis genelde 'sell'. "
+        "code SADECE şu listeden olmalı: " + code_list + ". Kullanıcı alarm istemiyorsa bu komutu "
+        "ASLA ekleme. Komutu kullanıcıya gösterme; ayrıca alarmın kurulduğunu doğal bir cümleyle söyle."
+    )
+    system = AI_PERSONA + "\n\n" + snapshot + alarm_rules
     if transcript:
         system += "\n\nÖnceki konuşma:\n" + transcript
     chat = _ai_chat(system, f"chat-{body.deviceId}")
     try:
-        reply = await chat.send_message(UserMessage(text=msg))
+        reply = str(await chat.send_message(UserMessage(text=msg)))
     except Exception as e:
         logger.warning("AI chat error: %s", e)
         raise HTTPException(502, "AI yanıtı alınamadı")
+    reply, alarm = await _handle_alarm_directive(reply, body.deviceId, catalog)
     now = datetime.now(timezone.utc).isoformat()
     await db.ai_messages.insert_many([
         {"deviceId": body.deviceId, "role": "user", "content": msg, "ts": now},
-        {"deviceId": body.deviceId, "role": "assistant", "content": str(reply), "ts": now},
+        {"deviceId": body.deviceId, "role": "assistant", "content": reply, "ts": now},
     ])
-    return {"reply": str(reply)}
+    return {"reply": reply, "alarmCreated": alarm is not None, "alarm": alarm}
+
+
+@api_router.post("/ai/transcribe")
+async def ai_transcribe(file: UploadFile = File(...)):
+    if stt_client is None:
+        raise HTTPException(503, "Ses tanıma yapılandırılmamış")
+    suffix = Path(file.filename or "recording.m4a").suffix.lower() or ".m4a"
+    if suffix.lstrip(".") not in ("m4a", "mp4", "mp3", "wav", "webm", "mpeg", "mpga"):
+        suffix = ".m4a"
+    data = await file.read(25 * 1024 * 1024 + 1)
+    if not data:
+        raise HTTPException(400, "Boş ses dosyası")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Ses dosyası 25 MB'tan küçük olmalı")
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        result = await stt_client.transcribe(tmp_path, language="tr")
+        text = (result.text if hasattr(result, "text") else str(result)).strip()
+        return {"text": text}
+    except Exception as e:
+        logger.warning("Transcription error: %s", e)
+        raise HTTPException(502, "Ses metne çevrilemedi")
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
 
 
 @api_router.post("/ai/commentary")

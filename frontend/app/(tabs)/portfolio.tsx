@@ -1,19 +1,22 @@
-import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
+import React, { useMemo, useState, useEffect } from "react";
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/src/theme/ThemeContext";
 import { usePrices } from "@/src/context/PricesContext";
 import { usePortfolio, Holding } from "@/src/context/PortfolioContext";
 import { Sheet } from "@/src/components/Sheet";
+import { LineChart } from "@/src/components/LineChart";
+import { DonutChart } from "@/src/components/DonutChart";
 import { api } from "@/src/api/client";
 import { formatNumber, formatTL, parseTR } from "@/src/utils/format";
 
 export default function PortfolioScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { items, byCode } = usePrices();
-  const { holdings, add, update, remove } = usePortfolio();
+  const { holdings, history, add, update, remove, recordSnapshot } = usePortfolio();
 
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -44,18 +47,49 @@ export default function PortfolioScreen() {
   const totals = useMemo(() => {
     let value = 0;
     let cost = 0;
+    let plValue = 0;
     let hasValue = false;
     for (const r of rows) {
       if (r.value != null) {
         value += r.value;
         hasValue = true;
       }
-      if (r.cost != null) cost += r.cost;
+      // P/L only over holdings that have a known buy price.
+      if (r.cost != null && r.value != null) {
+        cost += r.cost;
+        plValue += r.value;
+      }
     }
-    const pl = cost > 0 ? value - cost : null;
+    const pl = cost > 0 ? plValue - cost : null;
     const plPct = pl != null && cost > 0 ? (pl / cost) * 100 : null;
     return { value: hasValue ? value : null, cost: cost > 0 ? cost : null, pl, plPct };
   }, [rows]);
+
+  // Asset allocation: gold vs currency by current value.
+  const allocation = useMemo(() => {
+    let gold = 0;
+    let currency = 0;
+    for (const r of rows) {
+      if (r.value == null) continue;
+      if (r.h.type === "gold") gold += r.value;
+      else currency += r.value;
+    }
+    const total = gold + currency;
+    return {
+      gold,
+      currency,
+      total,
+      goldPct: total > 0 ? (gold / total) * 100 : 0,
+      currencyPct: total > 0 ? (currency / total) * 100 : 0,
+    };
+  }, [rows]);
+
+  // Record a daily value snapshot for the value-over-time chart.
+  useEffect(() => {
+    if (totals.value != null && totals.value > 0) recordSnapshot(totals.value);
+  }, [totals.value, recordSnapshot]);
+
+  const chartValues = useMemo(() => history.map((h) => h.value), [history]);
 
   const resetForm = () => {
     setEditing(null);
@@ -178,6 +212,7 @@ export default function PortfolioScreen() {
           renderItem={renderRow}
           contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 10 }}
           ListHeaderComponent={
+            <View>
             <View style={[styles.summary, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.sumLabel, { color: colors.textSecondary }]}>Toplam Güncel Değer</Text>
               <Text testID="portfolio-total-value" style={[styles.sumValue, { color: colors.text }]}>
@@ -209,6 +244,67 @@ export default function PortfolioScreen() {
                 <Ionicons name="sparkles" size={16} color={colors.gold} />
                 <Text style={[styles.adviceBtnTxt, { color: colors.gold }]}>AI Değerlendirmesi Al</Text>
               </Pressable>
+            </View>
+
+            {chartValues.length >= 2 && (
+              <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.chartTitle, { color: colors.text }]}>Değer Değişimi</Text>
+                <Text style={[styles.chartSub, { color: colors.textSecondary }]}>Son {chartValues.length} kayıt</Text>
+                <View style={{ marginTop: 10, alignItems: "center" }}>
+                  <LineChart values={chartValues} width={width - 64} height={120} />
+                </View>
+                <View style={styles.chartFoot}>
+                  <Text style={[styles.chartFootTxt, { color: colors.textTertiary }]}>{formatTL(chartValues[0], 0)}</Text>
+                  <Text style={[styles.chartFootTxt, { color: colors.textTertiary }]}>{formatTL(chartValues[chartValues.length - 1], 0)}</Text>
+                </View>
+              </View>
+            )}
+
+            {chartValues.length < 2 && (
+              <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.chartTitle, { color: colors.text }]}>Değer Değişimi</Text>
+                <Text style={[styles.chartSub, { color: colors.textSecondary }]}>
+                  Portföy değeriniz zaman içinde kaydedildikçe grafik burada oluşacak. Uygulamayı açık tuttukça grafik dolar.
+                </Text>
+              </View>
+            )}
+
+            {allocation.total > 0 && (
+              <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.chartTitle, { color: colors.text }]}>Varlık Dağılımı</Text>
+                <View style={styles.allocRow}>
+                  <DonutChart
+                    slices={[
+                      { label: "Altın", value: allocation.gold, color: colors.gold },
+                      { label: "Döviz", value: allocation.currency, color: colors.up },
+                    ]}
+                    size={132}
+                    strokeWidth={20}
+                    centerLabel="Dağılım"
+                  />
+                  <View style={styles.legend}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.gold }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.legendLabel, { color: colors.text }]}>Altın</Text>
+                        <Text style={[styles.legendVal, { color: colors.textSecondary }]}>
+                          %{formatNumber(allocation.goldPct, 1)} · {formatTL(allocation.gold, 0)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.up }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.legendLabel, { color: colors.text }]}>Döviz</Text>
+                        <Text style={[styles.legendVal, { color: colors.textSecondary }]}>
+                          %{formatNumber(allocation.currencyPct, 1)} · {formatTL(allocation.currency, 0)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
             </View>
           }
         />
@@ -332,6 +428,17 @@ const styles = StyleSheet.create({
     marginTop: 18, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
   },
   adviceBtnTxt: { fontSize: 14, fontWeight: "800" },
+  chartCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14 },
+  chartTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.2 },
+  chartSub: { fontSize: 12, marginTop: 2 },
+  chartFoot: { flexDirection: "row", justifyContent: "space-between", marginTop: 6 },
+  chartFootTxt: { fontSize: 11, fontVariant: ["tabular-nums"] },
+  allocRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  legend: { flex: 1, gap: 14 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 10 },
+  legendDot: { width: 12, height: 12, borderRadius: 4 },
+  legendLabel: { fontSize: 14, fontWeight: "700" },
+  legendVal: { fontSize: 12.5, marginTop: 2, fontVariant: ["tabular-nums"] },
   card: { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, padding: 14 },
   cardName: { fontSize: 15, fontWeight: "700" },
   cardSub: { fontSize: 12.5, marginTop: 4, fontVariant: ["tabular-nums"] },

@@ -69,6 +69,18 @@ Navigasyon: 6 sekme (Piyasa, Favoriler, Portföy, Hesapla, Alarmlar, Ayarlar).
 Test: iteration_4 — backend 11/11 pass, tüm frontend akışları geçti. Portföy USD 1000 adet @45 → değer 48.241,00 ₺ / K/Z +3.241,00 ₺ (%7,20) doğrulandı.
 
 Backlog:
-- P2: server.py 1027 satır (opsiyonel modülerleştirme).
+- P2: server.py ~1100 satır (opsiyonel modülerleştirme).
 - P1: Push + alarm sesi native build sonrası gerçek cihazda doğrulanmalı.
 - Kullanıcı isterse AI için kendi API anahtarını girebilir (şu an Emergent evrensel anahtar).
+
+## Iteration 5 (2026-06) — COMPLETED & tested (backend 10/10 + tüm frontend)
+Kullanıcı istekleri (4 yeni özellik):
+1. **Portföy Değer Grafiği** (`Değer Değişimi`): portföyün toplam değeri zaman içinde çizgi grafikte (`LineChart`). `PortfolioContext.history` + `recordSnapshot` — her ~3 dk'da bir intraday nokta (max 120), lokal saklama (`onlinekur.portfolioHistory`). <2 nokta varken bilgilendirici placeholder gösterilir.
+2. **Varlık Dağılımı** (`DonutChart` — yeni bileşen, react-native-svg): altın vs döviz yüzdesel dağılımı halka grafik + lejant (güncel değere göre).
+3. **AI Fiyat Alarmı**: `/api/ai/chat` artık kullanıcı "X fiyat olunca haber ver" derse gizli `[[ALARM:{...}]]` direktifi üretir; backend parse edip `db.alarms`'a alarm kurar (deviceId bazlı), direktifi yanıttan temizler, `{reply, alarmCreated, alarm}` döner. Frontend alarmCreated'da alarm listesini yeniler.
+4. **Sesli Soru**: AI Danışman'da mikrofon butonu (`ai-mic`). `expo-audio` ile kayıt → `/api/ai/transcribe` (OpenAI Whisper `whisper-1`, `language=tr`, emergentintegrations `OpenAISpeechToText`) → metin input'a yazılır ve otomatik gönderilir. Mikrofon izni bağlamsal istenir; reddde ayarlara yönlendirme. app.json: iOS NSMicrophoneUsageDescription, Android RECORD_AUDIO, expo-audio plugin. Web'de blob (webm), native'de m4a.
+
+K/Z düzeltmesi: toplam kâr/zarar artık YALNIZCA alış fiyatı girilmiş varlıklar üzerinden hesaplanıyor (önceki iterasyonda tüm değeri kısmi maliyete bölüp şişiren hata giderildi).
+Test: iteration_5 — backend 10/10, tüm frontend akışları geçti. USD 5@45 + GA 2 → K/Z +%7,20 doğru; donut %98,3 altın / %1,7 döviz; sohbetten "USD 70 olunca haber ver" → Alarmlar sekmesinde alarm oluştu.
+
+⚠ Sesli soru (mikrofon) ve alarm sesi/push yalnızca native build'de gerçek cihazda tam çalışır (Expo Go/web'de sınırlı).

@@ -69,11 +69,39 @@ export const api = {
   // AI assistant
   aiMessages: (deviceId: string) => req(`/ai/messages?deviceId=${encodeURIComponent(deviceId)}`),
   aiClear: (deviceId: string) => req(`/ai/messages?deviceId=${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
-  aiChat: (deviceId: string, message: string): Promise<{ reply: string }> =>
+  aiChat: (deviceId: string, message: string): Promise<{ reply: string; alarmCreated?: boolean; alarm?: any }> =>
     req(`/ai/chat`, { method: "POST", body: JSON.stringify({ deviceId, message }) }),
   aiCommentary: (): Promise<{ commentary: string; at: string }> => req(`/ai/commentary`, { method: "POST" }),
   aiPortfolioAdvice: (holdings: any[]): Promise<{ advice: string; totalValue: number; totalCost: number }> =>
     req(`/ai/portfolio-advice`, { method: "POST", body: JSON.stringify({ holdings }) }),
+  async aiTranscribe(fileUri: string, mime: string, name: string): Promise<{ text: string }> {
+    const form = new FormData();
+    form.append("file", { uri: fileUri, name, type: mime } as any);
+    const res = await fetch(`${BASE}/ai/transcribe`, { method: "POST", body: form });
+    if (!res.ok) {
+      let detail = "Ses metne çevrilemedi";
+      try {
+        const j = await res.json();
+        detail = j.detail || detail;
+      } catch {}
+      throw new Error(detail);
+    }
+    return res.json();
+  },
+  async aiTranscribeBlob(blob: Blob, name: string): Promise<{ text: string }> {
+    const form = new FormData();
+    form.append("file", blob, name);
+    const res = await fetch(`${BASE}/ai/transcribe`, { method: "POST", body: form });
+    if (!res.ok) {
+      let detail = "Ses metne çevrilemedi";
+      try {
+        const j = await res.json();
+        detail = j.detail || detail;
+      } catch {}
+      throw new Error(detail);
+    }
+    return res.json();
+  },
 
   // admin
   async login(email: string, password: string) {

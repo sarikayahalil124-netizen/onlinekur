@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.premiumkur.gt9vr0"
+      "bundleIdentifier": "com.emergent.premiumkur.gt9vr0",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Sesle soru sormak için mikrofon kullanılır"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +22,8 @@
       },
       "edgeToEdgeEnabled": true,
       "googleServicesFile": "./google-services.json",
-      "package": "com.emergent.premiumkur.gt9vr0"
+      "package": "com.emergent.premiumkur.gt9vr0",
+      "permissions": ["RECORD_AUDIO"]
     },
     "web": {
       "bundler": "metro",
@@ -30,6 +34,12 @@
       "expo-router",
       "expo-notifications",
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Sesle soru sormak için mikrofon kullanılır"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-image.png",
@@ -37,7 +47,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

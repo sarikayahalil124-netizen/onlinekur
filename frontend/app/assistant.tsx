@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TextInput, Pressable, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from "expo-audio";
 import { useTheme } from "@/src/theme/ThemeContext";
+import { useAlarms } from "@/src/context/AlarmsContext";
 import { api } from "@/src/api/client";
 import { getDeviceId } from "@/src/utils/device";
 
@@ -30,7 +32,11 @@ export default function AssistantScreen() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [initing, setIniting] = useState(true);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const listRef = useRef<FlatList<Msg>>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const { refresh: refreshAlarms } = useAlarms();
 
   useEffect(() => {
     (async () => {
@@ -59,6 +65,7 @@ export default function AssistantScreen() {
         const deviceId = await getDeviceId();
         const r = await api.aiChat(deviceId, t);
         setMessages((prev) => [...prev, { role: "assistant", content: r.reply }]);
+        if (r.alarmCreated) refreshAlarms();
       } catch (e: any) {
         setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ " + (e?.message || "Yanıt alınamadı. Lütfen tekrar deneyin.") }]);
       } finally {
@@ -66,8 +73,61 @@ export default function AssistantScreen() {
         scrollDown();
       }
     },
-    [sending, scrollDown],
+    [sending, scrollDown, refreshAlarms],
   );
+
+  const startRecording = useCallback(async () => {
+    try {
+      const perm = await AudioModule.getRecordingPermissionsAsync();
+      let status = perm;
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          Linking.openSettings();
+          return;
+        }
+        status = await AudioModule.requestRecordingPermissionsAsync();
+      }
+      if (!status.granted) return;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setRecording(true);
+    } catch {
+      setRecording(false);
+    }
+  }, [audioRecorder]);
+
+  const stopAndTranscribe = useCallback(async () => {
+    setRecording(false);
+    setTranscribing(true);
+    try {
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
+      if (!uri) throw new Error("Kayıt bulunamadı");
+      let res: { text: string };
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(uri)).blob();
+        res = await api.aiTranscribeBlob(blob, "recording.webm");
+      } else {
+        res = await api.aiTranscribe(uri, "audio/m4a", "recording.m4a");
+      }
+      const text = (res.text || "").trim();
+      if (text) {
+        setInput("");
+        await send(text);
+      }
+    } catch {
+      // silent — user can type instead
+    } finally {
+      setTranscribing(false);
+    }
+  }, [audioRecorder, send]);
+
+  const toggleRecord = useCallback(() => {
+    if (transcribing || sending) return;
+    if (recording) stopAndTranscribe();
+    else startRecording();
+  }, [recording, transcribing, sending, startRecording, stopAndTranscribe]);
 
   const sendCommentary = useCallback(async () => {
     if (sending) return;
@@ -185,12 +245,25 @@ export default function AssistantScreen() {
 
         {/* Input bar */}
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 10, borderTopColor: colors.border, backgroundColor: colors.bg }]}>
+          <Pressable
+            testID="ai-mic"
+            onPress={toggleRecord}
+            disabled={transcribing || sending}
+            style={[styles.micBtn, { backgroundColor: recording ? colors.down : colors.card2, borderColor: recording ? colors.down : colors.border }]}
+          >
+            {transcribing ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : (
+              <Ionicons name={recording ? "stop" : "mic"} size={20} color={recording ? "#fff" : colors.text} />
+            )}
+          </Pressable>
           <TextInput
             testID="ai-input"
             value={input}
             onChangeText={setInput}
-            placeholder="Bir soru yazın..."
+            placeholder={recording ? "Dinliyorum..." : transcribing ? "Metne çevriliyor..." : "Bir soru yazın..."}
             placeholderTextColor={colors.textTertiary}
+            editable={!recording && !transcribing}
             style={[styles.input, { backgroundColor: colors.card2, borderColor: colors.border, color: colors.text }]}
             multiline
             onSubmitEditing={() => send(input)}
@@ -225,6 +298,7 @@ const styles = StyleSheet.create({
   quickTxt: { flex: 1, fontSize: 14.5, fontWeight: "600" },
   bubble: { maxWidth: "85%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  micBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: StyleSheet.hairlineWidth },
   input: { flex: 1, maxHeight: 120, minHeight: 44, fontSize: 15, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 11, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });
