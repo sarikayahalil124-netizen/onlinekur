@@ -91,3 +91,10 @@ Kullanıcı isteği: **Sesli Yanıt** — AI Danışman cevaplarını sesli okus
 - Frontend: AI Danışman'daki her asistan baloncuğunda "Sesli oku" butonu (`ai-speak-{index}`). `expo-audio` `createAudioPlayer` (modül düzeyi tek örnek), oynatmadan önce `setAudioModeAsync({allowsRecording:false, playsInSilentMode:true})`, bitince otomatik durur, ekrandan çıkınca temizlenir. Toggle: Sesli oku ↔ Durdur.
 - ⚠ OpenAI sesleri İngilizce optimize; Türkçe okuma hafif aksanlı olabilir (sağlayıcı sınırı). Sesli oynatma en iyi gerçek cihazda çalışır.
 Test: iteration_6 — backend 12/12, frontend buton render + toggle + play doğrulandı.
+
+## Iteration 7 (2026-06) — BUG FIXES & tested (backend 10/10 + frontend)
+Kullanıcı 3 sorun bildirdi:
+1. **Grafik tarih aralığı çalışmıyordu** — Kök neden: `get_history(range: str)` parametresi Python `range()` fonksiyonunu gölgeliyordu → HTTP 500. Düzeltme: `range_: str = Query(alias="range")`. Ayrıca aralıklar saat bazlı yapıldı (1s=1sa, 6s, 12s, 1G=24sa, 1H=168sa, 1A=720sa) ve maks 80 noktaya seyrekleştirildi. Frontend RANGES güncellendi. (Not: DB migrasyondan beri ~2sa veri içeriyor; 6s+ aralıklar veri biriktikçe ayrışacak.)
+2. **Ses→metin başarısızdı** — Kök neden: whisper `transcribe`'a string yol veriliyordu ("Expected bytes/io/PathLike"). Düzeltme: açık dosya nesnesi (`open(path,'rb')`) geçildi. TTS→transcribe round-trip ile doğrulandı.
+3. **Sesli cevap** — `assistant.tsx` `send(text, autoSpeak)` eklendi; sesli soru sonrası `send(text, true)` çağrılıp asistan yanıtı otomatik TTS ile seslendiriliyor.
+Test: iteration_7 — backend 10/10, frontend akışları geçti, regresyon temiz.

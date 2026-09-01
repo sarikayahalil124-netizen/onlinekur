@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Response, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -653,12 +653,20 @@ async def get_price(code: str):
 
 
 @api_router.get("/history/{code}")
-async def get_history(code: str, range: str = "1G"):
-    ranges = {"1G": 1, "1H": 7, "1A": 30, "3A": 90, "6A": 180, "1Y": 365}
-    days = ranges.get(range, 1)
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    docs = await db.price_history.find({"code": code, "ts": {"$gte": since}}).sort("ts", 1).to_list(2000)
-    return {"code": code, "range": range,
+async def get_history(code: str, range_: str = Query("1G", alias="range")):
+    # Hour-based windows so intraday movement is visible for a live-price app.
+    ranges_hours = {"1s": 1, "6s": 6, "12s": 12, "1G": 24, "1H": 168, "1A": 720}
+    hours = ranges_hours.get(range_, 24)
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    docs = await db.price_history.find({"code": code, "ts": {"$gte": since}}).sort("ts", 1).to_list(5000)
+    # Downsample to at most ~80 points for a clean chart.
+    max_points = 80
+    if len(docs) > max_points:
+        step = len(docs) / max_points
+        sampled = [docs[min(int(i * step), len(docs) - 1)] for i in range(max_points)]
+        sampled[-1] = docs[-1]
+        docs = sampled
+    return {"code": code, "range": range_,
             "points": [{"buy": d["buy"], "sell": d["sell"], "ts": d["ts"]} for d in docs]}
 
 
@@ -1008,7 +1016,8 @@ async def ai_transcribe(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        result = await stt_client.transcribe(tmp_path, language="tr")
+        with open(tmp_path, "rb") as fh:
+            result = await stt_client.transcribe(fh, language="tr")
         text = (result.text if hasattr(result, "text") else str(result)).strip()
         return {"text": text}
     except Exception as e:

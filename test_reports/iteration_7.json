@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 7 verification: all 3 user-reported bug fixes confirmed. Backend 10/10 pytest cases pass. Frontend product-detail chart range chips (range-1s..1A) re-fetch on tap; assistant screen wires ai-mic, ai-input, ai-send, ai-speak-{i} with auto-speak after voice transcription (autoSpeak=true) and no crashes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7_bugs.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1180 lines — consider splitting AI, admin, market/history modules for maintainability (non-blocking).",
+    "assistant.tsx uses createAudioPlayer() at module scope; fine on native but on web preview Expo can log warnings — currently harmless."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7_bugs.py (new)",
+    "/app/test_reports/iteration_7.json (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (product chart ranges + assistant speak/mic verified)"},
+  "seed_data_creation": "None. Test created a temporary alarm via AI chat intent and cleaned it up via DELETE /api/alarms/{id}. AI chat messages for deviceId=TEST_iter7_device cleared after test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_iter7_bugs.py is the regression suite for iter7 fixes. It (1) hits /api/history/{code} with all six ranges expecting 200 + <=80 points and default range=1G, (2) generates TTS mp3 and round-trips it through /api/ai/transcribe expecting non-empty text, (3) regressions on /api/meta, /api/prices, /api/ai/commentary, /api/ai/chat alarm-intent (creates+deletes USD>100), and /api/ai/portfolio-advice. Frontend: use testIDs range-1s, range-6s, range-12s, range-1G, range-1H, range-1A on /product/{code}, and ai-mic, ai-input, ai-send, ai-speak-{index} on /assistant.",
+  "rca_of_issue": "BUG1 root cause was Python built-in shadowing: function signature `range: str = ...` shadowed built-in range() used inside list comprehensions for downsampling → HTTP 500. Fixed by renaming to `range_: str = Query('1G', alias='range')` while preserving public query-string API. BUG2 was caused by passing a filesystem path string to OpenAISpeechToText.transcribe() which expects a bytes-like/file object (`Expected entry at file to be bytes... received str`). Fixed by opening the temp file with `open(tmp_path, 'rb')` and passing the file handle. FEATURE3 (auto-speak after voice): send() now accepts autoSpeak flag; voice flow calls send(text, true) and on assistant reply schedules speak(idx, reply) 250ms after state update — verified wiring in assistant.tsx lines 98-126 and 149-172."
+}

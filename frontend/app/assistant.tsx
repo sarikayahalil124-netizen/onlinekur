@@ -96,7 +96,7 @@ export default function AssistantScreen() {
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, autoSpeak = false) => {
       const t = text.trim();
       if (!t || sending) return;
       setInput("");
@@ -106,7 +106,14 @@ export default function AssistantScreen() {
       try {
         const deviceId = await getDeviceId();
         const r = await api.aiChat(deviceId, t);
-        setMessages((prev) => [...prev, { role: "assistant", content: r.reply }]);
+        setMessages((prev) => {
+          const next = [...prev, { role: "assistant" as const, content: r.reply }];
+          if (autoSpeak && r.reply) {
+            const idx = next.length - 1;
+            setTimeout(() => speak(idx, r.reply), 250);
+          }
+          return next;
+        });
         if (r.alarmCreated) refreshAlarms();
       } catch (e: any) {
         setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ " + (e?.message || "Yanıt alınamadı. Lütfen tekrar deneyin.") }]);
@@ -115,7 +122,7 @@ export default function AssistantScreen() {
         scrollDown();
       }
     },
-    [sending, scrollDown, refreshAlarms],
+    [sending, scrollDown, refreshAlarms, speak],
   );
 
   const startRecording = useCallback(async () => {
@@ -156,7 +163,7 @@ export default function AssistantScreen() {
       const text = (res.text || "").trim();
       if (text) {
         setInput("");
-        await send(text);
+        await send(text, true);
       }
     } catch {
       // silent — user can type instead

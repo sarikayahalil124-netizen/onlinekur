@@ -12,12 +12,12 @@ import { StatusPill } from "@/src/components/StatusPill";
 import { formatNumber, providerTimeOnly } from "@/src/utils/format";
 
 const RANGES = [
-  { label: "Gün", value: "1G" },
-  { label: "Hafta", value: "1H" },
-  { label: "Ay", value: "1A" },
-  { label: "3 Ay", value: "3A" },
-  { label: "6 Ay", value: "6A" },
-  { label: "Yıl", value: "1Y" },
+  { label: "1s", value: "1s" },
+  { label: "6s", value: "6s" },
+  { label: "12s", value: "12s" },
+  { label: "1G", value: "1G" },
+  { label: "1H", value: "1H" },
+  { label: "1A", value: "1A" },
 ];
 
 export default function ProductDetail() {
