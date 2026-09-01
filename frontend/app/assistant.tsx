@@ -1,0 +1,230 @@
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import {
+  View, Text, StyleSheet, FlatList, TextInput, Pressable, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ScrollView,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@/src/theme/ThemeContext";
+import { api } from "@/src/api/client";
+import { getDeviceId } from "@/src/utils/device";
+
+interface Msg {
+  role: "user" | "assistant";
+  content: string;
+}
+
+const QUICK = [
+  { label: "Bugünkü piyasa yorumu", commentary: true },
+  { label: "Dolar bugün ne durumda?", commentary: false },
+  { label: "Altın mı döviz mi almalıyım?", commentary: false },
+];
+
+export default function AssistantScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [initing, setIniting] = useState(true);
+  const listRef = useRef<FlatList<Msg>>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const deviceId = await getDeviceId();
+        const res = await api.aiMessages(deviceId);
+        setMessages((res.items || []).map((m: any) => ({ role: m.role, content: m.content })));
+      } catch {}
+      setIniting(false);
+    })();
+  }, []);
+
+  const scrollDown = useCallback(() => {
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+  }, []);
+
+  const send = useCallback(
+    async (text: string) => {
+      const t = text.trim();
+      if (!t || sending) return;
+      setInput("");
+      setMessages((prev) => [...prev, { role: "user", content: t }]);
+      setSending(true);
+      scrollDown();
+      try {
+        const deviceId = await getDeviceId();
+        const r = await api.aiChat(deviceId, t);
+        setMessages((prev) => [...prev, { role: "assistant", content: r.reply }]);
+      } catch (e: any) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ " + (e?.message || "Yanıt alınamadı. Lütfen tekrar deneyin.") }]);
+      } finally {
+        setSending(false);
+        scrollDown();
+      }
+    },
+    [sending, scrollDown],
+  );
+
+  const sendCommentary = useCallback(async () => {
+    if (sending) return;
+    setMessages((prev) => [...prev, { role: "user", content: "Bugünkü piyasa yorumu" }]);
+    setSending(true);
+    scrollDown();
+    try {
+      const r = await api.aiCommentary();
+      setMessages((prev) => [...prev, { role: "assistant", content: r.commentary }]);
+    } catch (e: any) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ " + (e?.message || "Yorum alınamadı.") }]);
+    } finally {
+      setSending(false);
+      scrollDown();
+    }
+  }, [sending, scrollDown]);
+
+  const clear = useCallback(async () => {
+    setMessages([]);
+    try {
+      const deviceId = await getDeviceId();
+      await api.aiClear(deviceId);
+    } catch {}
+  }, []);
+
+  const renderMsg = ({ item }: { item: Msg }) => {
+    const isUser = item.role === "user";
+    return (
+      <View
+        testID={`ai-msg-${item.role}`}
+        style={[
+          styles.bubble,
+          isUser
+            ? { alignSelf: "flex-end", backgroundColor: colors.gold, borderBottomRightRadius: 4 }
+            : { alignSelf: "flex-start", backgroundColor: colors.card, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderBottomLeftRadius: 4 },
+        ]}
+      >
+        <Text style={{ color: isUser ? colors.onGold : colors.text, fontSize: 14.5, lineHeight: 21 }}>
+          {item.content}
+        </Text>
+      </View>
+    );
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      {/* Custom header */}
+      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.bg }]}>
+        <Pressable testID="assistant-back" onPress={() => router.back()} hitSlop={10} style={styles.hBtn}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.hTitle, { color: colors.text }]}>AI Danışman</Text>
+          <Text style={[styles.hSub, { color: colors.textSecondary }]}>Altın & döviz asistanınız</Text>
+        </View>
+        {messages.length > 0 && (
+          <Pressable testID="assistant-clear" onPress={clear} hitSlop={10} style={styles.hBtn}>
+            <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
+          </Pressable>
+        )}
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
+      >
+        {initing ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.gold} />
+          </View>
+        ) : messages.length === 0 ? (
+          <ScrollView contentContainerStyle={styles.emptyWrap} keyboardShouldPersistTaps="handled">
+            <View style={[styles.heroIcon, { backgroundColor: colors.goldSoft }]}>
+              <Ionicons name="sparkles" size={30} color={colors.gold} />
+            </View>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>Merhaba! 👋</Text>
+            <Text style={[styles.heroTxt, { color: colors.textSecondary }]}>
+              Güncel altın ve döviz fiyatlarına göre size yardımcı olabilirim. Bir şey sorun ya da hızlı başlayın:
+            </Text>
+            <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
+              {QUICK.map((q) => (
+                <Pressable
+                  key={q.label}
+                  testID={`ai-quick-${q.label}`}
+                  onPress={() => (q.commentary ? sendCommentary() : send(q.label))}
+                  style={[styles.quick, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  <Ionicons name={q.commentary ? "newspaper-outline" : "chatbubble-ellipses-outline"} size={18} color={colors.gold} />
+                  <Text style={[styles.quickTxt, { color: colors.text }]}>{q.label}</Text>
+                  <Ionicons name="arrow-forward" size={16} color={colors.textTertiary} />
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(_, i) => String(i)}
+            renderItem={renderMsg}
+            contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 16 }}
+            onContentSizeChange={scrollDown}
+            keyboardShouldPersistTaps="handled"
+            ListFooterComponent={
+              sending ? (
+                <View style={[styles.bubble, { alignSelf: "flex-start", backgroundColor: colors.card, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, flexDirection: "row", gap: 8, alignItems: "center" }]}>
+                  <ActivityIndicator size="small" color={colors.gold} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 13.5 }}>yazıyor...</Text>
+                </View>
+              ) : null
+            }
+          />
+        )}
+
+        {/* Input bar */}
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + 10, borderTopColor: colors.border, backgroundColor: colors.bg }]}>
+          <TextInput
+            testID="ai-input"
+            value={input}
+            onChangeText={setInput}
+            placeholder="Bir soru yazın..."
+            placeholderTextColor={colors.textTertiary}
+            style={[styles.input, { backgroundColor: colors.card2, borderColor: colors.border, color: colors.text }]}
+            multiline
+            onSubmitEditing={() => send(input)}
+            returnKeyType="send"
+          />
+          <Pressable
+            testID="ai-send"
+            onPress={() => send(input)}
+            disabled={!input.trim() || sending}
+            style={[styles.sendBtn, { backgroundColor: input.trim() && !sending ? colors.gold : colors.border }]}
+          >
+            <Ionicons name="arrow-up" size={20} color={input.trim() && !sending ? colors.onGold : colors.textTertiary} />
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  hBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  hTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
+  hSub: { fontSize: 12, marginTop: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  emptyWrap: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  heroIcon: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  heroTitle: { fontSize: 22, fontWeight: "800" },
+  heroTxt: { fontSize: 14, textAlign: "center", lineHeight: 21, marginTop: 8, paddingHorizontal: 8 },
+  quick: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  quickTxt: { flex: 1, fontSize: 14.5, fontWeight: "600" },
+  bubble: { maxWidth: "85%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
+  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  input: { flex: 1, maxHeight: 120, minHeight: 44, fontSize: 15, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 11, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+});

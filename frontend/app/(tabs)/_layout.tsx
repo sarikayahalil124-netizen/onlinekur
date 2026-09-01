@@ -10,6 +10,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   index: { active: "stats-chart", inactive: "stats-chart-outline" },
   favorites: { active: "star", inactive: "star-outline" },
+  portfolio: { active: "wallet", inactive: "wallet-outline" },
   calculator: { active: "calculator", inactive: "calculator-outline" },
   alarms: { active: "notifications", inactive: "notifications-outline" },
   settings: { active: "settings", inactive: "settings-outline" },
@@ -45,6 +46,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Piyasa" }} />
       <Tabs.Screen name="favorites" options={{ title: "Favoriler" }} />
+      <Tabs.Screen name="portfolio" options={{ title: "Portföy" }} />
       <Tabs.Screen name="calculator" options={{ title: "Hesapla" }} />
       <Tabs.Screen name="alarms" options={{ title: "Alarmlar" }} />
       <Tabs.Screen name="settings" options={{ title: "Ayarlar" }} />

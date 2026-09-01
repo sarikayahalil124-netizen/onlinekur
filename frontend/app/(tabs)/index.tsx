@@ -65,6 +65,14 @@ export default function MarketScreen() {
               <Text style={{ fontVariant: ["tabular-nums"], color: colors.textSecondary }}>{formatTime(lastSuccess)}</Text>
             </Text>
           </View>
+          <Pressable
+            testID="open-assistant-btn"
+            onPress={() => router.push("/assistant")}
+            style={[styles.aiBtn, { backgroundColor: colors.gold }]}
+            hitSlop={6}
+          >
+            <Ionicons name="sparkles" size={18} color={colors.onGold} />
+          </Pressable>
         </View>
 
         <View style={styles.searchRow}>
@@ -158,6 +166,7 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "flex-start" },
   title: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5 },
   subtitle: { fontSize: 13, marginTop: 2, letterSpacing: -0.2 },
+  aiBtn: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", marginLeft: 10 },
   feedBox: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   feedDot: { width: 7, height: 7, borderRadius: 4, marginRight: 5 },
   feedTxt: { fontSize: 12, fontWeight: "700" },

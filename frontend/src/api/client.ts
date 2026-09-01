@@ -66,6 +66,15 @@ export const api = {
     req(`/alarms/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ active }) }),
   deleteAlarm: (id: string) => req(`/alarms/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
+  // AI assistant
+  aiMessages: (deviceId: string) => req(`/ai/messages?deviceId=${encodeURIComponent(deviceId)}`),
+  aiClear: (deviceId: string) => req(`/ai/messages?deviceId=${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
+  aiChat: (deviceId: string, message: string): Promise<{ reply: string }> =>
+    req(`/ai/chat`, { method: "POST", body: JSON.stringify({ deviceId, message }) }),
+  aiCommentary: (): Promise<{ commentary: string; at: string }> => req(`/ai/commentary`, { method: "POST" }),
+  aiPortfolioAdvice: (holdings: any[]): Promise<{ advice: string; totalValue: number; totalCost: number }> =>
+    req(`/ai/portfolio-advice`, { method: "POST", body: JSON.stringify({ holdings }) }),
+
   // admin
   async login(email: string, password: string) {
     const data = await req(`/auth/login`, { method: "POST", body: JSON.stringify({ email, password }) });

@@ -814,6 +814,187 @@ async def revert_draft(_: dict = Depends(current_admin)):
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ AI assistant (Gemini 3.5 Flash via Emergent LLM key)
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+AI_PROVIDER = "gemini"
+AI_MODEL = "gemini-3.5-flash"
+
+AI_PERSONA = (
+    "Sen 'ONLİNE KUR' uygulamasının Türkçe konuşan altın ve döviz piyasası asistanısın. "
+    "Kısa, net ve samimi yanıtlar ver. Yalnızca sana verilen güncel fiyat verilerine dayan; "
+    "asla uydurma fiyat verme. Yatırım yorumu yaparken bunun kesin bir tavsiye olmadığını, "
+    "kişisel karar ve risk gerektirdiğini nazikçe hatırlat. Yanıtların sade Türkçe olsun ve "
+    "mobil ekrana uygun kısa paragraflar veya madde işaretleri şeklinde yazılsın."
+)
+
+
+def _dec_for(ptype: str) -> int:
+    return 2 if ptype == "gold" else 4
+
+
+async def market_snapshot_text(limit: int = 24) -> str:
+    global_pub = await get_global("published")
+    configs = await db.product_configs.find({"active": True}).to_list(1000)
+    opens = await day_opens()
+    rows = []
+    for cfg in configs:
+        code = cfg["_id"]
+        market = MARKET.get(code)
+        if market is None:
+            continue
+        dec = market["decimals"]
+        priced = compute_price(market, cfg.get("published", default_rule()), global_pub, dec)
+        op = opens.get(code, {}).get("openSell")
+        change = round((market["sell"] - op) / op * 100, 2) if op and op > 0 else None
+        rows.append((cfg.get("order", 999), code, {
+            "name": market["name"], "type": market["type"],
+            "buy": priced["buy"], "sell": priced["sell"], "changePct": change, "dec": dec,
+        }))
+    rows.sort(key=lambda x: (x[0], x[1]))
+    lines = []
+    for _, code, r in rows[:limit]:
+        chg = f"%{r['changePct']:+.2f}" if r["changePct"] is not None else "-"
+        kind = "Altın" if r["type"] == "gold" else "Döviz"
+        lines.append(
+            f"- {r['name']} ({code}) [{kind}]: Alış {fmt_tr(r['buy'], r['dec'])} / "
+            f"Satış {fmt_tr(r['sell'], r['dec'])} · Günlük {chg}"
+        )
+    ts = PROVIDER.get("lastSuccess") or "-"
+    return f"Güncel piyasa verileri (güncelleme: {ts}):\n" + "\n".join(lines)
+
+
+def _ai_chat(system_message: str, session_id: str) -> LlmChat:
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(503, "AI anahtarı yapılandırılmamış")
+    return LlmChat(
+        api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system_message
+    ).with_model(AI_PROVIDER, AI_MODEL)
+
+
+class AiChatBody(BaseModel):
+    deviceId: str
+    message: str
+
+
+@api_router.get("/ai/messages")
+async def ai_messages(deviceId: str):
+    docs = await db.ai_messages.find({"deviceId": deviceId}).sort("ts", 1).to_list(300)
+    return {"items": [{"role": d["role"], "content": d["content"], "ts": d["ts"]} for d in docs]}
+
+
+@api_router.delete("/ai/messages")
+async def ai_clear(deviceId: str):
+    await db.ai_messages.delete_many({"deviceId": deviceId})
+    return {"ok": True}
+
+
+@api_router.post("/ai/chat")
+async def ai_chat(body: AiChatBody):
+    msg = body.message.strip()
+    if not msg:
+        raise HTTPException(400, "Mesaj boş")
+    snapshot = await market_snapshot_text()
+    prev = await db.ai_messages.find({"deviceId": body.deviceId}).sort("ts", -1).to_list(10)
+    prev.reverse()
+    transcript = "\n".join(
+        f"{'Kullanıcı' if m['role'] == 'user' else 'Asistan'}: {m['content']}" for m in prev
+    )
+    system = AI_PERSONA + "\n\n" + snapshot
+    if transcript:
+        system += "\n\nÖnceki konuşma:\n" + transcript
+    chat = _ai_chat(system, f"chat-{body.deviceId}")
+    try:
+        reply = await chat.send_message(UserMessage(text=msg))
+    except Exception as e:
+        logger.warning("AI chat error: %s", e)
+        raise HTTPException(502, "AI yanıtı alınamadı")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.ai_messages.insert_many([
+        {"deviceId": body.deviceId, "role": "user", "content": msg, "ts": now},
+        {"deviceId": body.deviceId, "role": "assistant", "content": str(reply), "ts": now},
+    ])
+    return {"reply": str(reply)}
+
+
+@api_router.post("/ai/commentary")
+async def ai_commentary():
+    snapshot = await market_snapshot_text()
+    chat = _ai_chat(AI_PERSONA, f"commentary-{int(time.time() // 300)}")
+    prompt = (
+        "Aşağıdaki güncel verilere göre bugünkü altın ve döviz piyasasına dair kısa bir genel "
+        "yorum yaz (en fazla 4-5 cümle veya madde). Öne çıkan yükseliş ve düşüşleri vurgula.\n\n"
+        + snapshot
+    )
+    try:
+        reply = await chat.send_message(UserMessage(text=prompt))
+    except Exception as e:
+        logger.warning("AI commentary error: %s", e)
+        raise HTTPException(502, "AI yorumu alınamadı")
+    return {"commentary": str(reply), "at": datetime.now(timezone.utc).isoformat()}
+
+
+class Holding(BaseModel):
+    code: str
+    name: str
+    type: str = "currency"
+    qty: float
+    buyPrice: Optional[float] = None
+
+
+class PortfolioBody(BaseModel):
+    holdings: list[Holding]
+
+
+@api_router.post("/ai/portfolio-advice")
+async def ai_portfolio_advice(body: PortfolioBody):
+    if not body.holdings:
+        raise HTTPException(400, "Portföy boş")
+    global_pub = await get_global("published")
+    lines = []
+    total_val = 0.0
+    total_cost = 0.0
+    for h in body.holdings:
+        market = MARKET.get(h.code)
+        cfg = await db.product_configs.find_one({"_id": h.code})
+        if market is None or cfg is None:
+            continue
+        dec = market["decimals"]
+        priced = compute_price(market, cfg.get("published", default_rule()), global_pub, dec)
+        cur = priced["sell"]
+        val = cur * h.qty
+        total_val += val
+        line = f"- {h.name} ({h.code}): {fmt_tr(h.qty, 2)} adet × {fmt_tr(cur, dec)} = {fmt_tr(val, 2)} TL"
+        if h.buyPrice:
+            cost = h.buyPrice * h.qty
+            total_cost += cost
+            line += f" (maliyet {fmt_tr(h.buyPrice, dec)} → K/Z {fmt_tr(val - cost, 2)} TL)"
+        lines.append(line)
+    if not lines:
+        raise HTTPException(400, "Portföydeki varlıklar için güncel fiyat yok")
+    summary = "\n".join(lines)
+    summary += f"\n\nToplam güncel değer: {fmt_tr(total_val, 2)} TL"
+    if total_cost:
+        summary += (
+            f"\nToplam maliyet: {fmt_tr(total_cost, 2)} TL · "
+            f"Toplam K/Z: {fmt_tr(total_val - total_cost, 2)} TL"
+        )
+    chat = _ai_chat(AI_PERSONA, f"advice-{int(time.time())}")
+    prompt = (
+        "Kullanıcının portföyü aşağıda. Güncel piyasaya göre kısa bir değerlendirme yap: "
+        "dağılımı yorumla, dikkat edilebilecek noktaları belirt ve genel bir öneri sun "
+        "(kesin tavsiye değil). En fazla 6 madde ile yaz.\n\nPORTFÖY:\n"
+        + summary + "\n\n" + await market_snapshot_text()
+    )
+    try:
+        reply = await chat.send_message(UserMessage(text=prompt))
+    except Exception as e:
+        logger.warning("AI advice error: %s", e)
+        raise HTTPException(502, "AI değerlendirmesi alınamadı")
+    return {"advice": str(reply), "totalValue": round(total_val, 2), "totalCost": round(total_cost, 2)}
+
+
 # ------------------------------------------------------------------ startup
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"],

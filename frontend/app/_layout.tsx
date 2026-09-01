@@ -14,6 +14,7 @@ import { SettingsProvider } from "@/src/context/SettingsContext";
 import { FavoritesProvider } from "@/src/context/FavoritesContext";
 import { PricesProvider } from "@/src/context/PricesContext";
 import { AlarmsProvider } from "@/src/context/AlarmsContext";
+import { PortfolioProvider } from "@/src/context/PortfolioContext";
 import { storage } from "@/src/utils/storage";
 
 // Disable logbox errors etc so that users can see the app
@@ -44,6 +45,8 @@ if (Platform.OS === "android") {
     name: "Fiyat Alarmları",
     importance: Notifications.AndroidImportance.MAX,
     sound: "default",
+    enableVibrate: true,
+    vibrationPattern: [0, 300, 200, 300],
   });
 }
 
@@ -133,7 +136,9 @@ export default function RootLayout() {
             <FavoritesProvider>
               <PricesProvider>
                 <AlarmsProvider>
-                  <ThemedShell />
+                  <PortfolioProvider>
+                    <ThemedShell />
+                  </PortfolioProvider>
                 </AlarmsProvider>
               </PricesProvider>
             </FavoritesProvider>

@@ -53,3 +53,22 @@ Test: iteration_2 — backend 9/9, frontend tüm akışlar geçti.
 - Alarm history (alarm_history collection + GET /api/alarms/history + Aktif/Geçmiş tab on alarms screen).
 - Firebase google-services.json added (android.googleServicesFile). ⚠ package mismatch: file=online.kur vs app.json=com.emergent.premiumkur.gt9vr0 — awaiting user decision.
 All backend + frontend tests passed (iteration_3.json).
+
+## Iteration 4 (2026-06) — COMPLETED & tested (11/11 backend + full frontend)
+Kullanıcı istekleri (mevcut uygulamaya eksik özellik ekleme):
+1. **Portföy ekranı** (yeni 6. sekme `app/(tabs)/portfolio.tsx`): kullanıcı elindeki altın/döviz miktarını + opsiyonel alış fiyatını girer; toplam güncel TL değeri ve kâr/zarar (tutar + %) anlık gösterilir. Cihazda lokal saklanır (`PortfolioContext` + storage util, key `onlinekur.portfolio`). Ekle/düzenle/sil, özet kartı.
+2. **AI Danışman** (Gemini 3.5 Flash, Emergent LLM key): `app/assistant.tsx` sohbet ekranı (Piyasa header'ındaki sparkles butonu ile açılır). Backend endpoints:
+   - `POST /api/ai/chat` (multi-turn, geçmiş `ai_messages` koleksiyonunda; her istekte güncel piyasa snapshot'ı + son 10 mesaj sistem mesajına eklenir)
+   - `POST /api/ai/commentary` (günün piyasa yorumu, 5 dk session cache)
+   - `POST /api/ai/portfolio-advice` (portföye göre değerlendirme; value/PL backend'de hesaplanır)
+   - `GET/DELETE /api/ai/messages` (geçmiş/temizle)
+   - `emergentintegrations.LlmChat`, model `gemini-3.5-flash`, non-streaming `send_message` (mobil güvenilirlik). `EMERGENT_LLM_KEY` .env'de.
+3. **Alarm sesi**: Android bildirim kanalı `vibrationPattern:[0,300,200,300]` + `enableVibrate` + `sound:"default"`; iOS push handler `shouldPlaySound:true`. ⚠ Yalnızca native build'de test edilebilir (Expo Go/web değil).
+
+Navigasyon: 6 sekme (Piyasa, Favoriler, Portföy, Hesapla, Alarmlar, Ayarlar).
+Test: iteration_4 — backend 11/11 pass, tüm frontend akışları geçti. Portföy USD 1000 adet @45 → değer 48.241,00 ₺ / K/Z +3.241,00 ₺ (%7,20) doğrulandı.
+
+Backlog:
+- P2: server.py 1027 satır (opsiyonel modülerleştirme).
+- P1: Push + alarm sesi native build sonrası gerçek cihazda doğrulanmalı.
+- Kullanıcı isterse AI için kendi API anahtarını girebilir (şu an Emergent evrensel anahtar).
