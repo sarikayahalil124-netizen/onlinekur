@@ -101,3 +101,30 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Iteration 2 — 2026-06 (Feature batch: UI overhaul + alarms push + admin reorder)
+
+Main agent implemented:
+1. Source hiding: "Altınkaynak" removed from ALL user-facing screens (market header, product detail stats, settings). Admin screens still show provider name (intentional, admin-only).
+2. Market screen: default filter now "Döviz" (currency), sticky column header (ÜRÜN/ALIŞ/SATIŞ), list/card view toggle button (persisted in settings as marketView), search unchanged.
+3. Product detail (/product/[code]): new "GÜN İÇİ" section with live day high/low (backend computes from today's price_history in Europe/Istanbul terms, fields dayHigh/dayLow on GET /api/prices/{code}); chart range chips relabeled (Gün/Hafta/Ay/3 Ay/6 Ay/Yıl); chart caption shows range min/max; "Kaynak" stat replaced with "Makas (Fark)".
+4. Calculator: new mode toggle "TL Karşılığı" | "Çevirici" — converter converts between any two products (amount × fromRate / toRate) with swap button and TL intermediate display.
+5. Alarms: now server-side. Backend: POST/GET/PUT/DELETE /api/alarms (deviceId-scoped, soft delete), alarm engine runs after each poll (10s) — sets triggeredAt, re-arms when condition releases, sends push via Emergent relay (POST /api/register-push + send_push helper, EMERGENT_PUSH_KEY=placeholder). Frontend: AlarmsContext synced with backend, deviceId generated locally, contextual push permission request after alarm creation (works only on native builds, not web/Expo Go).
+6. Admin reorder: new screen /admin/reorder — custom drag&drop (long-press 180ms, reanimated), PUT /api/admin/reorder {codes} sets order immediately (not draft-gated). "Sırala" button on admin dashboard.
+
+Test focus:
+- backend: /api/alarms CRUD, alarm trigger behavior (create alarm with target below current price → triggeredAt set within ~15s), /api/prices/{code} has dayHigh/dayLow >= /<= sell, /api/admin/reorder (auth required) changes order in /api/prices, /api/register-push returns 500/502 gracefully with placeholder key (should NOT crash).
+- frontend: market default tab Döviz, column headers visible, view toggle switches to 2-col cards, no "Altınkaynak" text anywhere user-facing, product detail day high/low + chart, calculator converter mode, alarms create/toggle/delete via backend, admin login + Sırala screen loads.
+- Admin creds in /app/memory/test_credentials.md
+
+## Iteration 3 — 2026-06 (Feature batch: daily % change + favorites summary widget + alarm history)
+
+Main agent implemented:
+1. Daily % change: backend GET /api/prices now returns `changePct` per item = (current raw sell - today's opening raw sell)/open * 100, rounded 2dp. Null when no history for the day (no fake values). New helper day_opens() aggregates first ts of current IST day per code. Frontend: PercentBadge component (green/red/neutral, caret icon) shown in PriceRow metaRow (next to code) and PriceCard sell row; hidden when changePct null.
+2. Favorites summary widget: new FavoritesSummary component rendered at top of market screen (below header, above list). Horizontal scroll chips of favorited products (code, sell, % badge). Hidden when no favorites. Tapping a chip navigates to /product/{code}.
+3. Alarm history: backend records each trigger into `alarm_history` collection (deviceId, code, name, basis, condition, target, price, decimals, triggeredAt) inside check_alarms; new GET /api/alarms/history?deviceId= returns items sorted desc. Frontend: AlarmsContext now fetches history alongside alarms (parallel, every 15s); alarms screen has "Aktif / Geçmiş" SegmentedControl tab — history tab lists triggered events with date (formatDateTime) and price, active tab unchanged with FAB.
+4. Firebase: user-provided google-services.json placed at /app/frontend/google-services.json and referenced in app.json android.googleServicesFile. NOTE package mismatch: file package_name=online.kur vs app.json android.package=com.emergent.premiumkur.gt9vr0 (pending user decision, does not affect preview).
+
+Test focus (iteration 3):
+- backend: GET /api/prices items include changePct (number or null); GET /api/alarms/history?deviceId= returns {items:[]} and records after a trigger (create alarm with target below current sell → within ~15s appears in history with price & triggeredAt). Existing alarm CRUD still works.
+- frontend: market screen shows colored % badges next to codes; favorites summary strip appears after starring a product and shows the starred item; alarms screen Aktif/Geçmiş tab toggle works, Geçmiş lists triggered alarms with date+price.
+- Admin creds unchanged in /app/memory/test_credentials.md.

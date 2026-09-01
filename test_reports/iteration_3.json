@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 3 (changePct on /api/prices, alarm history endpoint + trigger→history recording, frontend PercentBadge in list/card, FavoritesSummary strip, Alarms Aktif/Geçmiş segmented toggle) PASSED end-to-end. Backend: 4/4 new pytest cases green in test_iter3_features.py — /api/prices returns changePct on every item (number or null, all values within realistic ±50% bounds); /api/alarms/history returns {items:[]} for fresh deviceId; POSTing an alarm with basis=sell condition='>' target=(current_sell-5) then polling /api/alarms/history yields within ~24s a record with numeric price>target, matching target, ISO triggeredAt, code=USD, name='ABD Doları'. Regression: iter2 TestAlarms (create/list/trigger/reset/delete + bad-condition rejection) still 2/2 green. Frontend (390x844 mobile viewport): market list rows show colored daily % pills next to product codes (green ▲+%0,09 EUR, red ▼-%0,01 AED, muted —%0,00 USD/AZN), card view also renders pill on the sell row (screenshot confirmed EUR/CHF/AUD/CAD cards). Tapping star on USD row instantly shows a horizontal 'FAVORİLERİM' strip above the list with a USD chip (code + big sell price + percent pill); adding EUR shows a second chip; tapping fav-summary-USD navigates to /product/USD. Alarms screen: 'Aktif / Geçmiş' segmented toggle present; switching to Geçmiş renders the empty state with clock icon + 'Geçmiş kaydı yok' + explanatory subtitle; switching back to Aktif shows the empty state with 'Yeni Alarm Ekle' FAB. No red-screen errors; only known non-blocking web warnings (expo-notifications web listener, shadow*/pointerEvents deprecations — carried over from iter2).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Pre-existing (iter2) console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Non-blocking on web preview. Reference: search /app/frontend for shadowColor|shadowOpacity."},
+      {"component": "pointerEvents prop", "issue": "Pre-existing (iter2) console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. PriceRow.tsx already passes it via style, but Animated wrappers may still trigger it; non-blocking. Reference: /app/frontend/src/components/PriceRow.tsx:58-59."},
+      {"component": "expo-notifications on web", "issue": "Pre-existing: web listener not supported — expected in preview; requires native build to validate push. Reference: /app/frontend/src/utils/push.ts."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter3_features.py",
+    "/app/test_reports/pytest/iter3_new_features.xml"
+  ],
+  "action_items": [
+    "Optional cleanup (still carried over from iter2): migrate shadow*/pointerEvents style props to boxShadow / style.pointerEvents on web to silence deprecation warnings.",
+    "Native binary + real EMERGENT_PUSH_KEY needed to validate on-device push delivery for alarm triggers (backend already persists history correctly and swallows push errors)."
+  ],
+  "critical_code_review_comments": [
+    "server.py now 847 lines — passed the 700-line split guideline. Recommend splitting into modules (poller, alarms, push, prices, admin, auth) before next iteration.",
+    "day_opens aggregation correctly uses IST-midnight; changePct is computed from raw market.sell vs opening sell — precise, and safely None when no history yet or open==0. No division-by-zero risk (op and op>0 guard).",
+    "check_alarms writes alarm_history BEFORE attempting push and wraps push in try/except — history persists even when EMERGENT_PUSH_KEY is placeholder (verified by iter3 test where push returns 500 upstream but history record is created).",
+    "GET /api/alarms/history correctly excludes MongoDB _id from response (maps to str(d['_id']) as id).",
+    "AlarmsContext refresh() interval 15s is aligned with the poller (10s) — history UI updates within one cycle after backend triggers.",
+    "FavoritesSummary correctly returns null when favorites empty (won't take vertical space) and reuses PercentBadge/formatNumber — no duplication.",
+    "PercentBadge returns null on null/undefined/NaN — no 'NaN%' leak; flat threshold |v|<0.005 shows neutral pill correctly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter3_features.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4 iter3 + 2/2 iter2 alarms regression)", "frontend": "100% (all 3 requested UI features verified visually + navigation)"},
+  "seed_data_creation": "Alarm history test uses ephemeral deviceId (uuid4) and cleans up its alarm via DELETE in fixture teardown. No admin auth needed for iter3 features.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Three pytest files at /app/backend/tests/: test_onlinekur_api.py (iter1), test_new_features.py (iter2), test_iter3_features.py (iter3). Backend URL https://premium-kur.preview.emergentagent.com. Poller interval 10s, so alarm-history trigger test waits up to 24s. changePct is null when no intraday history yet (fresh start) — that's valid. Web preview cannot receive real push (placeholder EMERGENT_PUSH_KEY) — this is by design and does not block alarm-history persistence."
+}
